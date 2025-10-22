@@ -90,9 +90,10 @@ def test_cli_runs_pipeline_and_writes_output(tmp_path: Path, runner: CliRunner) 
     assert output_path.exists()
 
     rendered = json.loads(output_path.read_text(encoding="utf-8"))
-    assert isinstance(rendered, list)
-    assert rendered
-    candidate_result = rendered[0]
+    assert "metadata" in rendered
+    assert rendered["metadata"]["job_id"] == "JD-001"
+    assert rendered["results"]
+    candidate_result = rendered["results"][0]
 
     assert candidate_result["candidate_id"] == "C-001"
     assert candidate_result["decision"]["decision"] == "pass"

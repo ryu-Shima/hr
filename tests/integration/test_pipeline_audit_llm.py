@@ -61,6 +61,8 @@ def test_pipeline_writes_audit_log_without_llm_call(tmp_path: Path) -> None:
     assert audit_entry["candidate_id"] == "C-LLM"
     assert "llm_response" not in audit_entry
 
-    first_result = results[0]
+    output_obj = json.loads(output_path.read_text(encoding="utf-8"))
+    assert output_obj["results"]
+    first_result = output_obj["results"][0]
     assert "llm_payload" in first_result
     assert "llm_response" not in first_result

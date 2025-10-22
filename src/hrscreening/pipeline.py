@@ -14,6 +14,7 @@ from .adapters import BizReachAdapter, ResumeAdapter
 from .core import ScreeningCore
 from .llm import build_llm_payload
 from .schemas import CandidateProfile, JobDescription
+from . import __version__
 
 
 class AdapterRegistry:
@@ -32,6 +33,18 @@ class AdapterRegistry:
         return list(self._adapters.keys())
 
 
+class CandidateLoadError(ValueError):
+    """Raised when candidate loading encounters invalid records."""
+
+    def __init__(self, errors: list[str], partial: list[CandidateProfile]):
+        super().__init__("Candidate loading failed")
+        self.errors = errors
+        self.partial = partial
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"Candidate loading failed: {self.errors}"
+
+
 class CandidateLoader:
     """Load candidate profiles through adapters."""
 
@@ -40,22 +53,38 @@ class CandidateLoader:
 
     def load(self, path: Path) -> list[CandidateProfile]:
         candidates: list[CandidateProfile] = []
+        errors: list[str] = []
         with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
+            for idx, line in enumerate(handle, start=1):
+                raw = line.strip()
+                if not raw:
                     continue
-                record = json.loads(line)
+                try:
+                    record = json.loads(raw)
+                except json.JSONDecodeError as exc:
+                    errors.append(f"line {idx}: invalid JSON ({exc})")
+                    continue
                 provider = record.get("provider")
                 if not provider:
-                    raise ValueError("Candidate record missing provider.")
-                adapter = self._registry.get(provider)
+                    errors.append(f"line {idx}: missing provider field")
+                    continue
+                try:
+                    adapter = self._registry.get(provider)
+                except KeyError:
+                    errors.append(f"line {idx}: unsupported provider '{provider}'")
+                    continue
                 payload = record.get("payload", record)
-                candidate_dict = adapter.parse_candidate(
-                    json.dumps(payload, ensure_ascii=False)
-                )
-                candidates.append(
-                    CandidateProfile.model_validate(candidate_dict)
-                )
+                try:
+                    candidate_dict = adapter.parse_candidate(
+                        json.dumps(payload, ensure_ascii=False)
+                    )
+                    candidate = CandidateProfile.model_validate(candidate_dict)
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(f"line {idx}: {exc}")
+                    continue
+                candidates.append(candidate)
+        if errors:
+            raise CandidateLoadError(errors, candidates)
         return candidates
 
 
@@ -64,14 +93,17 @@ class JobLoader:
 
     def load(self, path: Path) -> JobDescription:
         with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
+            try:
+                data = json.load(handle)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid job JSON: {exc}") from exc
         return JobDescription.model_validate(data)
 
 
 class OutputWriter:
     """Persist screening outcomes."""
 
-    def write(self, path: Path, payload: list[dict]) -> None:
+    def write(self, path: Path, payload: dict | list[dict]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
@@ -108,7 +140,13 @@ class ScreeningPipeline:
         audit_logger: "AuditLogger | None" = None,
     ) -> list[dict]:
         job = self._jobs.load(job_path)
-        candidates = self._candidates.load(candidates_path)
+        load_errors: list[str] = []
+        try:
+            candidates = self._candidates.load(candidates_path)
+        except CandidateLoadError as exc:
+            candidates = exc.partial
+            load_errors.extend(exc.errors)
+            self._logger.warning("candidates.partial_load", errors=exc.errors)
 
         serialized_results: list[dict] = []
 
@@ -148,7 +186,19 @@ class ScreeningPipeline:
                 pre_llm_score=outcome.aggregate.pre_llm_score,
             )
 
-        self._writer.write(output_path, serialized_results)
+        metadata = {
+            "job_id": job.job_id,
+            "candidate_count": len(candidates),
+            "errors": load_errors,
+            "timestamp": pendulum.now().to_iso8601_string(),
+            "app_version": __version__,
+        }
+        payload_with_meta = {
+            "metadata": metadata,
+            "results": serialized_results,
+        }
+
+        self._writer.write(output_path, payload_with_meta)
         return serialized_results
 
 
@@ -174,4 +224,3 @@ class AuditLogger:
         with self._path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False))
             handle.write("\n")
-
