@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from .bizreach import BizReachAdapter
+
 
 @runtime_checkable
 class ResumeAdapter(Protocol):
@@ -25,5 +27,4 @@ class ResumeAdapter(Protocol):
         """Parse a candidate section and return a provider-neutral dictionary."""
 
 
-__all__ = ["ResumeAdapter"]
-
+__all__ = ["ResumeAdapter", "BizReachAdapter"]

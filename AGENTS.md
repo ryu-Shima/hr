@@ -647,3 +647,6 @@ Temperature = 0.
 - TenureEvaluator / SalaryEvaluator / JDMatcher を実装し、安定勤務・給与マッチ・キーワード網羅率の評価ロジックを追加（`src/hrscreening/core/evaluators/`）。
 - 各 Evaluator の単体テストを整備（`tests/core/test_tenure_evaluator.py`、`test_salary_evaluator.py`、`test_jd_matcher.py`）。
 - ScreeningCore のデフォルト重みを拡張し、`tenure_pass` / `salary_pass` / `jd_pass` を事前スコアに寄与させるよう更新。
+- BizReach 向け JSON アダプタを仮実装（`src/hrscreening/adapters/bizreach.py`）し、JSONL 入力から `CandidateProfile` へ正規化。
+- 依存性コンテナとパイプライン（`src/hrscreening/container.py`、`src/hrscreening/pipeline.py`）を整備し、CLI からエンドツーエンド実行可能にした。
+- Typer ベースの CLI を追加（`src/hrscreening/cli.py`）し、`tests/integration/test_cli_pipeline.py` で I/O を含む統合テストを作成。

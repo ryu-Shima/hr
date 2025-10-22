@@ -20,3 +20,12 @@ AGENTS.md の仕様に従い、サイト非依存のコアとサイト依存の�
 
 テスト駆動開発（TDD）でフェーズごとに RED→GREEN→REFACTOR を徹底します。
 
+## CLIの実行例
+
+共通 JSONL 形式の候補者ファイルと求人 JSON を用意して、次のようにスクリプトとして実行できます。
+
+```powershell
+py -m hrscreening.cli --candidates data/candidates.jsonl --job data/job.json --output out/results.json
+```
+
+`--as-of` オプションで在籍期間計算の基準日（`YYYY-MM` など）を上書き可能です。

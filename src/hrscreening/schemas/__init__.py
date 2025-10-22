@@ -6,6 +6,7 @@ from .candidate import (
     CandidateProfile,
     CandidateSkillAggregate,
     ExperienceEntry,
+    EducationEntry,
     LanguageProficiency,
 )
 from .job import JobDescription
@@ -16,4 +17,5 @@ __all__ = [
     "JobDescription",
     "LanguageProficiency",
     "ExperienceEntry",
+    "EducationEntry",
 ]

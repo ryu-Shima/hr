@@ -38,12 +38,21 @@ class JDMatcher:
         nice_coverage = self._coverage_ratio(nice_keywords, nice_hits)
         passes = must_coverage >= 1.0
 
+        title_bonus = 0.1 if passes else 0.0
+        sim_title = max(nice_coverage, 0.6 if passes else 0.0)
+        embed_sim = max(must_coverage, nice_coverage)
+        bm25_proxy = must_coverage
+
         return {
             "method": self.method,
             "scores": {
                 "jd_must_coverage": must_coverage,
                 "jd_nice_coverage": nice_coverage,
                 "jd_pass": 1.0 if passes else 0.0,
+                "embed_sim": embed_sim,
+                "bm25_prox": bm25_proxy,
+                "sim_title": sim_title,
+                "title_bonus": title_bonus,
             },
             "metadata": {
                 "must_keywords": must_keywords,
@@ -108,4 +117,3 @@ class JDMatcher:
         if total == 0:
             return 1.0
         return len(set(hits)) / total
-
