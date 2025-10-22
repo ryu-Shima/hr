@@ -83,12 +83,11 @@
 
 ```
 入力 (PDF/CSV/JSON)
- ├─ Adapter 層（サイト依存）…… BizReachAdapter / GreenAdapter / LinkedInAdapter ...
- │    └─ provider-neutral Candidate JSON を生成
- ├─ Core 層（サイト非依存）…… ScreeningCore
- │    ├─ ParserService / Normalizer / Evaluator
- │    └─ OutputWriter（CSV/JSON）
- └─ Config 層 …… 設定値・ルール管理
+ ├─ CLIヘルパー …… `convert-pdf`（pymupdf4llm で Markdown 抽出→JSONL 変換、BizReach 固有ヘッダー除去）
+ ├─ Adapter 層（サイト依存）…… BizReachAdapter（JSONL を CandidateProfile に正規化）
+ ├─ Core 層（サイト非依存）…… ScreeningCore（Evaluator、ハードゲート、LLM ペイロード生成）
+ ├─ Pipeline 層 …… Candidate/Job Loader、AuditLogger、structlog による監査ログ
+ └─ Config 層 …… Pydantic 設定（YAML 検証）と dependency-injector で動的注入
 ```
 
 ---
@@ -101,14 +100,15 @@
 
 | クラス                   | 責務                                    |
 | --------------------- | ------------------------------------- |
-| `ResumeAdapter`       | 各サイト固有レジュメを provider-neutral JSON に変換 |
-| `CandidateNormalizer` | データ形式の正規化（日時・数値・テキスト整形）               |
-| `TenureEvaluator`     | 在籍期間計算・ジョブホッパー判定                      |
-| `SalaryEvaluator`     | 希望年収と求人年収のマッチング評価                     |
-| `JDMatcher`           | JDとのキーワードマッチ評価                        |
-| `ScreeningCore`       | 上記Evaluatorを統合し最終スコア算出                |
-| `OutputWriter`        | 結果をCSV/JSONとして保存                      |
-| `ConfigManager`       | YAML設定の読み込みと提供                        |
+| `BizReachAdapter`     | BizReach JSON(L) を CandidateProfile に変換 |
+| `CandidateLoader`     | JSONL 読み込みと検証（部分成功・エラー記録） |
+| `JobLoader`           | JD JSON の読み込み・検証                     |
+| `TenureEvaluator`     | 在籍期間計算・リスク評価（high/medium/low）   |
+| `SalaryEvaluator`     | 希望年収と求人年収のマッチング評価（ギャップ算出） |
+| `JDMatcher`           | BM25 / TF-IDF 類似のキーワード評価            |
+| `ScreeningCore`       | Evaluator 統合・ハードゲート・LLMペイロード生成 |
+| `AuditLogger`         | structlog 形式で監査ログ（JSONL）を出力        |
+| `CLI (run/convert-pdf)` | パイプライン実行・PDF変換のエントリポイント         |
 
 ---
 
@@ -157,6 +157,18 @@ class Evaluator(Protocol):
 ---
 
 ## 5. データスキーマ（サイト非依存）
+### 5.1 BizReach PDF 抽出項目
+
+- ビズリーチのレジュメ PDF を `convert-pdf` コマンドで Markdown→JSONL に変換する際は、以下の見出しのみを抽出対象とする。
+  - 職務経歴概要内: `所属企業一覧`、`直近の年収`、`経験職種`、`経験業種`、`マネジメント経験`、`海外勤務経験`
+  - 学歴/語学 内: `学歴`、`語学力`、`海外留学経験`
+  - `職務要約` のテキスト全文
+  - `コアスキル（活かせる経験・知識・能力）`
+  - 職務経歴内の各社について `企業名`、`期間`、`経験職種`、`業務内容のテキスト全文`
+  - `学歴`、`表彰`、`語学・資格`、`特記事項`、`フリーテキスト`
+- 上記以外の項目はキーとして作成せず、必要なら `notes` もしくは `provider_raw` に保持する。
+- これらは BizReach 固有の取り扱いであり、他媒体への転用や共通ロジック化は禁止。
+
 
 ```json
 {
@@ -182,6 +194,8 @@ class Evaluator(Protocol):
   "provider_raw": {"text": null, "fields": {}}
 }
 ```
+
+※ 上記スキーマは Pydantic v2 で `CandidateProfile` / `JobDescription` として実装し、CLI・パイプライン経由で常にバリデーションされる。
 
 ---
 
@@ -605,11 +619,13 @@ Temperature = 0.
 * k（Top-k）: 3
 * 合格境界: `τ_pass = 0.80`, `τ_borderline = 0.65`
 * BM25: `k1=1.2`, `b=0.75`
+* ScreeningCore 合成重み（例）: `bm25_prox=0.40`, `embed_sim=0.35`, `sim_title=0.08`, `title_bonus=0.07`, `tenure_pass=0.04`, `salary_pass=0.04`, `jd_pass=0.02`
 
 ---
 
 ## 9. ログ・監査・再現性
 
+* structlog で JSON 監査ログを出力し、必要に応じて `--audit-log` で永続化
 * すべての実行で以下を記録
 
   * 入力 JSON ハッシュ、前処理辞書/オントロジのバージョン
@@ -656,3 +672,6 @@ Temperature = 0.
 - LLM API は有償のため **実際には呼び出さない** 方針とし、生成したペイロードは監査ログやオフライン評価でのみ活用する。
 - 候補者/求人入力のバリデーションと部分成功ハンドリングを実装、出力 JSON にメタ情報（処理エラー・タイムスタンプ・バージョン）を付与。
 - YAML 設定は Pydantic スキーマで検証し、BM25/Embedding Evaluator にシノニム拡張やパラメータ調整を設定化。
+- PDF レジュメを `convert-pdf` コマンドで Markdown 抽出→JSONL 変換できるよう整備。余計な注意書きは除去し、最低限の候補者スキーマに整形。
+- BizReach PDF 変換で `職務経歴` セクションのプレーンテキスト行から会社名・在籍期間・タイトルを正しく抽出し、複数行に分割された箇条書きを連結して `CandidateProfile.experiences` を常に充足するよう改修（`src/hrscreening/markdown_to_jsonl.py`、`tests/markdown/test_markdown_to_jsonl.py`）。
+

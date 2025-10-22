@@ -54,3 +54,20 @@ evaluators:
     synonyms:
       aws: ["Amazon Web Services"]
 ```
+
+
+### PDF から JSONL への変換
+
+BizReach の PDF レジュメを直接 JSONL に変換する場合は次の CLI を利用します。
+
+```powershell
+py -m hrscreening.cli convert-pdf --pdf content.pdf --output out/candidates.jsonl --markdown out/content.md
+```
+
+- `--markdown` を付けると中間の Markdown を保存できます（省略可）
+- BizReach 固有の注意書きやアカウント名などのボイラープレート行は自動で除外されます。
+- 出力は 1 行 1 候補者の JSON Lines 形式です。
+
+```jsonl
+{"provider": "bizreach", "payload": {"candidate_id": "BU1234567", "gender": "男性", ...}}
+```
