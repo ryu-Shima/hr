@@ -59,6 +59,13 @@ class TenureEvaluator:
         )
 
         passes = not is_job_hopper or passes_contract_rule
+        risk_level, reasons = self._derive_risk(
+            per_experience=per_experience,
+            average_months=average_months,
+            recent_short_count=recent_short_count,
+            is_job_hopper=is_job_hopper,
+            passes_contract_rule=passes_contract_rule,
+        )
 
         return {
             "method": self.method,
@@ -74,8 +81,38 @@ class TenureEvaluator:
                 "is_contract_profile": is_contract_profile,
                 "contract_average_months": contract_avg_months,
                 "passes_contract_rule": passes_contract_rule,
+                "risk_level": risk_level,
+                "reasons": reasons,
             },
         }
+
+    def _derive_risk(
+        self,
+        *,
+        per_experience: list[dict[str, Any]],
+        average_months: float,
+        recent_short_count: int,
+        is_job_hopper: bool,
+        passes_contract_rule: bool,
+    ) -> tuple[str, list[str]]:
+        reasons: list[str] = []
+        if not per_experience:
+            reasons.append("NO_HISTORY")
+            return "unknown", reasons
+
+        if is_job_hopper and not passes_contract_rule:
+            reasons.append("RECENT_SHORT_TENURE")
+            return "high", reasons
+
+        if recent_short_count >= 1:
+            reasons.append("RECENT_SHORT_TENURE")
+            return "medium", reasons
+
+        if average_months < self._config.average_threshold_months:
+            reasons.append("LOW_AVERAGE_TENURE")
+            return "medium", reasons
+
+        return "low", reasons
 
     def _compute_per_experience(
         self,
@@ -162,4 +199,3 @@ class TenureEvaluator:
             return as_of
         parsed = self._parse_date(str(as_of), default=default_now)
         return parsed or default_now
-

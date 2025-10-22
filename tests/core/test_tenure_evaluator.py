@@ -32,6 +32,7 @@ def test_tenure_evaluator_passes_stable_history():
     assert result["metadata"]["average_months"] >= 30.0
     assert result["scores"]["tenure_pass"] == pytest.approx(1.0)
     assert result["metadata"]["is_job_hopper"] is False
+    assert result["metadata"]["risk_level"] == "low"
 
 
 def test_tenure_evaluator_flags_job_hopper():
@@ -49,6 +50,8 @@ def test_tenure_evaluator_flags_job_hopper():
     assert outcome["scores"]["tenure_pass"] == pytest.approx(0.0)
     assert outcome["metadata"]["is_job_hopper"] is True
     assert outcome["metadata"]["recent_short_tenures"] >= 2
+    assert outcome["metadata"]["risk_level"] == "high"
+    assert "RECENT_SHORT_TENURE" in outcome["metadata"]["reasons"]
 
 
 def test_tenure_contract_profile_relaxed_threshold():
@@ -78,3 +81,4 @@ def test_tenure_contract_profile_relaxed_threshold():
     assert pytest.approx(12.5, rel=1e-2) == result["metadata"]["contract_average_months"]
     assert result["scores"]["tenure_pass"] == pytest.approx(1.0)
     assert result["metadata"]["passes_contract_rule"] is True
+    assert result["metadata"]["risk_level"] in {"low", "medium"}

@@ -31,6 +31,8 @@ def test_salary_overlap_within_tolerance_passes():
 
     assert result["scores"]["salary_pass"] == 1.0
     assert result["metadata"]["overlap_span"] > 0
+    assert result["metadata"]["status"] == "within_tolerance"
+    assert result["metadata"]["gap_amount"] == 0
 
 
 def test_salary_outside_tolerance_fails():
@@ -42,6 +44,8 @@ def test_salary_outside_tolerance_fails():
 
     assert outcome["scores"]["salary_pass"] == 0.0
     assert outcome["metadata"]["overlap_span"] is None
+    assert outcome["metadata"]["status"] == "out_of_range"
+    assert outcome["metadata"]["gap_amount"] > 0
 
 
 def test_salary_missing_candidate_range_passes_by_default():
@@ -53,4 +57,4 @@ def test_salary_missing_candidate_range_passes_by_default():
 
     assert result["scores"]["salary_pass"] == 1.0
     assert result["metadata"]["message"] == "insufficient_data"
-
+    assert result["metadata"]["status"] == "insufficient_data"

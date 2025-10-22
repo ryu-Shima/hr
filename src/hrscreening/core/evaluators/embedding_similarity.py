@@ -19,6 +19,7 @@ class EmbeddingSimilarityConfig:
 
     top_k: int = 3
     section_weights: dict[str, float] = None  # type: ignore[assignment]
+    synonyms: dict[str, list[str]] | None = None
 
     def __post_init__(self) -> None:
         if self.section_weights is None:
@@ -27,6 +28,8 @@ class EmbeddingSimilarityConfig:
                 "summary": 0.8,
                 "title": 0.7,
             }
+        if self.synonyms is None:
+            self.synonyms = {}
 
 
 class EmbeddingSimilarityEvaluator:
@@ -49,8 +52,9 @@ class EmbeddingSimilarityEvaluator:
         if not resume_entries:
             return self._empty_payload()
 
-        corpus = [self._tokenize(text) for text in jd_texts]
-        resume_tokens = [self._tokenize(entry["text"]) for entry in resume_entries]
+        augmented_jd_texts = [self._augment_text(text) for text in jd_texts]
+        corpus = [self._tokenize(text) for text in augmented_jd_texts]
+        resume_tokens = [self._tokenize(entry["augmented_text"]) for entry in resume_entries]
 
         if not any(corpus) or not any(resume_tokens):
             return self._empty_payload()
@@ -90,11 +94,32 @@ class EmbeddingSimilarityEvaluator:
         entries: list[dict[str, Any]] = []
         for exp in profile.experiences or []:
             if exp.title:
-                entries.append({"text": exp.title, "section": "title", "weight": self._config.section_weights["title"]})
+                entries.append(
+                    {
+                        "text": exp.title,
+                        "augmented_text": self._augment_text(exp.title),
+                        "section": "title",
+                        "weight": self._config.section_weights["title"],
+                    }
+                )
             if exp.summary:
-                entries.append({"text": exp.summary, "section": "summary", "weight": self._config.section_weights["summary"]})
+                entries.append(
+                    {
+                        "text": exp.summary,
+                        "augmented_text": self._augment_text(exp.summary),
+                        "section": "summary",
+                        "weight": self._config.section_weights["summary"],
+                    }
+                )
             for bullet in exp.bullets or []:
-                entries.append({"text": bullet, "section": "bullets", "weight": self._config.section_weights["bullets"]})
+                entries.append(
+                    {
+                        "text": bullet,
+                        "augmented_text": self._augment_text(bullet),
+                        "section": "bullets",
+                        "weight": self._config.section_weights["bullets"],
+                    }
+                )
         return [entry for entry in entries if entry["text"]]
 
     def _collect_evidence(
@@ -133,8 +158,8 @@ class EmbeddingSimilarityEvaluator:
         if not candidate_titles:
             return 0.0
 
-        job_vectors = [self._tfidf_vector(self._tokenize(text), idf) for text in job.role_titles]
-        candidate_vectors = [self._tfidf_vector(self._tokenize(text), idf) for text in candidate_titles]
+        job_vectors = [self._tfidf_vector(self._tokenize(self._augment_text(text)), idf) for text in job.role_titles]
+        candidate_vectors = [self._tfidf_vector(self._tokenize(self._augment_text(text)), idf) for text in candidate_titles]
         best = 0.0
         for job_vec in job_vectors:
             for candidate_vec in candidate_vectors:
@@ -190,6 +215,16 @@ class EmbeddingSimilarityEvaluator:
             else:
                 normalized.append(token)
         return normalized
+
+    def _augment_text(self, text: str) -> str:
+        tokens = self._tokenize(text)
+        synonyms = self._config.synonyms or {}
+        extras: list[str] = []
+        for token in tokens:
+            extras.extend(synonyms.get(token, []))
+        if extras:
+            return text + " " + " ".join(sorted(set(extras)))
+        return text
 
     def _empty_payload(self) -> dict[str, Any]:
         return {

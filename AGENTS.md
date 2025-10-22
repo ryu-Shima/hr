@@ -654,3 +654,5 @@ Temperature = 0.
 - 手法1（BM25＋近接）/手法2（TF-IDFコサイン近似）の Evaluator を実装し、ヒット証跡とタイトルボーナスを含むスコアリングを追加（`src/hrscreening/core/evaluators/bm25_proximity.py`, `embedding_similarity.py`）。
 - LLM再ランク用ペイロード生成と structlog ベースの監査ログをパイプラインに組み込み、CLI から `--config` / `--log-level` / `--audit-log` を指定できるように拡張（`src/hrscreening/pipeline.py`, `src/hrscreening/cli.py`, `src/hrscreening/logging.py`, `src/hrscreening/llm.py`）。
 - LLM API は有償のため **実際には呼び出さない** 方針とし、生成したペイロードは監査ログやオフライン評価でのみ活用する。
+- 候補者/求人入力のバリデーションと部分成功ハンドリングを実装、出力 JSON にメタ情報（処理エラー・タイムスタンプ・バージョン）を付与。
+- YAML 設定は Pydantic スキーマで検証し、BM25/Embedding Evaluator にシノニム拡張やパラメータ調整を設定化。

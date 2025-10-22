@@ -35,6 +35,7 @@ class SalaryEvaluator:
                 desired_range=desired_range,
                 job_range=job_range,
                 message="insufficient_data",
+                status="insufficient_data",
             )
 
         expanded_job_min = (
@@ -57,6 +58,12 @@ class SalaryEvaluator:
             desired_range,
             (expanded_job_min, expanded_job_max),
         )
+        gap = self._gap_amount(desired_range, job_range)
+        status = (
+            "insufficient_data"
+            if desired_range is None or job_range is None
+            else ("within_tolerance" if passes else "out_of_range")
+        )
 
         return self._build_response(
             passes=passes,
@@ -64,6 +71,8 @@ class SalaryEvaluator:
             job_range=job_range,
             expanded_job_range=(expanded_job_min, expanded_job_max),
             overlap_span=overlap_span,
+            status=status,
+            gap=gap,
         )
 
     @staticmethod
@@ -131,6 +140,8 @@ class SalaryEvaluator:
         expanded_job_range: tuple[float | None, float | None] | None = None,
         overlap_span: float | None = None,
         message: str | None = None,
+        status: str | None = None,
+        gap: int | None = None,
     ) -> dict[str, Any]:
         return {
             "method": self.method,
@@ -145,6 +156,24 @@ class SalaryEvaluator:
                 "overlap_span": overlap_span,
                 "tolerance_ratio": self._config.tolerance_ratio,
                 "message": message,
+                "status": status,
+                "gap_amount": gap,
             },
         }
 
+    @staticmethod
+    def _gap_amount(
+        candidate_range: tuple[int | None, int | None] | None,
+        job_range: tuple[int | None, int | None] | None,
+    ) -> int | None:
+        if not candidate_range or not job_range:
+            return None
+        cand_min, cand_max = candidate_range
+        job_min, job_max = job_range
+        if cand_min is None or cand_max is None or job_min is None or job_max is None:
+            return None
+        if cand_max < job_min:
+            return job_min - cand_max
+        if cand_min > job_max:
+            return cand_min - job_max
+        return 0

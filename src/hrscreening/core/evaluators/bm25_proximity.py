@@ -23,6 +23,7 @@ class BM25ProximityConfig:
     alpha_proximity: float = 0.2
     window: int = 8
     section_weights: dict[str, float] = None  # type: ignore[assignment]
+    synonyms: dict[str, list[str]] | None = None
 
     def __post_init__(self) -> None:
         if self.section_weights is None:
@@ -32,6 +33,8 @@ class BM25ProximityConfig:
                 "title": 0.8,
                 "skills": 0.5,
             }
+        if self.synonyms is None:
+            self.synonyms = {}
 
 
 class BM25ProximityEvaluator:
@@ -59,7 +62,7 @@ class BM25ProximityEvaluator:
 
         queries = self._build_queries(job)
         for query in queries:
-            query_tokens = self._tokenize(query)
+            query_tokens = self._expand_tokens(self._tokenize(query))
             if not query_tokens:
                 continue
             best_hit = self._score_query(
@@ -148,6 +151,13 @@ class BM25ProximityEvaluator:
             seen.add(tokenized)
             unique_queries.append(text)
         return unique_queries
+
+    def _expand_tokens(self, tokens: list[str]) -> list[str]:
+        expanded = set(tokens)
+        for token in list(expanded):
+            for alt in self._config.synonyms.get(token, []):
+                expanded.update(self._tokenize(alt))
+        return list(expanded)
 
     def _score_query(
         self,

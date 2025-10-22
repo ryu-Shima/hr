@@ -12,6 +12,7 @@ import yaml
 from .container import create_container
 from .logging import configure_logging
 from .pipeline import AuditLogger
+from .schemas.config import AppConfig, load_config
 
 app = typer.Typer(help="Candidate resume screening CLI.")
 
@@ -37,10 +38,9 @@ def run(
     settings: dict[str, Any] = {}
     if config:
         with config.open("r", encoding="utf-8") as handle:
-            loaded = yaml.safe_load(handle) or {}
-            if not isinstance(loaded, dict):
-                raise typer.BadParameter("Config file must be a YAML object", param_name="config")
-            settings = loaded
+            raw = yaml.safe_load(handle) or {}
+            app_config = load_config(raw)
+            settings = app_config.to_settings()
 
     configure_logging(log_level)
 
