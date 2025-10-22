@@ -7,16 +7,7 @@ from hrscreening.container import create_container
 from hrscreening.pipeline import AuditLogger
 
 
-class DummyLLMClient:
-    def __init__(self) -> None:
-        self.calls: list[dict] = []
-
-    def rerank(self, payload: dict) -> dict:
-        self.calls.append(payload)
-        return {"decision": "pass", "final_score_hint": 0.9}
-
-
-def test_pipeline_writes_audit_log_and_calls_llm(tmp_path: Path) -> None:
+def test_pipeline_writes_audit_log_without_llm_call(tmp_path: Path) -> None:
     candidates_path = tmp_path / "candidates.jsonl"
     job_path = tmp_path / "job.json"
     output_path = tmp_path / "results.json"
@@ -53,17 +44,14 @@ def test_pipeline_writes_audit_log_and_calls_llm(tmp_path: Path) -> None:
     container = create_container()
     pipeline = container.pipeline()
     audit_logger = AuditLogger(audit_path)
-    dummy_llm = DummyLLMClient()
 
     results = pipeline.run(
         candidates_path=candidates_path,
         job_path=job_path,
         output_path=output_path,
         audit_logger=audit_logger,
-        llm_client=dummy_llm,
     )
 
-    assert dummy_llm.calls, "LLM client should be invoked"
     assert output_path.exists()
     assert audit_path.exists()
 
@@ -71,8 +59,8 @@ def test_pipeline_writes_audit_log_and_calls_llm(tmp_path: Path) -> None:
     assert audit_lines
     audit_entry = json.loads(audit_lines[0])
     assert audit_entry["candidate_id"] == "C-LLM"
-    assert "llm_response" in audit_entry
+    assert "llm_response" not in audit_entry
 
     first_result = results[0]
     assert "llm_payload" in first_result
-    assert first_result["llm_response"] == {"decision": "pass", "final_score_hint": 0.9}
+    assert "llm_response" not in first_result

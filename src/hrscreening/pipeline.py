@@ -106,7 +106,6 @@ class ScreeningPipeline:
         output_path: Path,
         as_of: str | None = None,
         audit_logger: "AuditLogger | None" = None,
-        llm_client: "LLMClientProtocol | None" = None,
     ) -> list[dict]:
         job = self._jobs.load(job_path)
         candidates = self._candidates.load(candidates_path)
@@ -120,13 +119,9 @@ class ScreeningPipeline:
                 context={"as_of": as_of} if as_of else None,
             )
             llm_payload = build_llm_payload(job=job, candidate=candidate, outcome=outcome)
-            llm_response = None
-            if llm_client:
-                llm_response = llm_client.rerank(llm_payload)
 
             outcome_dict = asdict(outcome)
             outcome_dict["llm_payload"] = llm_payload
-            outcome_dict["llm_response"] = llm_response
 
             serialized_entry = json.loads(
                 json.dumps(outcome_dict, default=_json_default, ensure_ascii=False)
@@ -142,7 +137,6 @@ class ScreeningPipeline:
                         "decision": outcome.decision.decision,
                         "hard_gate_flags": outcome.decision.hard_gate_flags,
                         "llm_payload": llm_payload,
-                        "llm_response": llm_response,
                     }
                 )
 
@@ -152,7 +146,6 @@ class ScreeningPipeline:
                 job_id=job.job_id,
                 decision=outcome.decision.decision,
                 pre_llm_score=outcome.aggregate.pre_llm_score,
-                llm_response=llm_response,
             )
 
         self._writer.write(output_path, serialized_results)
@@ -182,9 +175,3 @@ class AuditLogger:
             handle.write(json.dumps(record, ensure_ascii=False))
             handle.write("\n")
 
-
-class LLMClientProtocol:
-    """Protocol for LLM rerank clients."""
-
-    def rerank(self, payload: dict) -> dict | None:  # pragma: no cover - interface
-        raise NotImplementedError

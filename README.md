@@ -34,6 +34,7 @@ py -m hrscreening.cli --candidates data/candidates.jsonl --job data/job.json --o
 
 - `--config config.yaml` で YAML 設定を読み込み、`core.score_weights` や `evaluators.bm25` などを上書きできます。
 - `--log-level DEBUG` のように指定すると、`structlog` による JSON ログの冗長さを調整できます。
+- `--audit-log audit.jsonl` を指定すると、実行ごとの監査情報（LLMペイロード含む）を JSONL として記録します。LLM API は呼び出さない方針です。
 
 サンプル設定:
 
