@@ -9,7 +9,7 @@
 
 * **サイト非依存（コア）** と **サイト依存（アダプタ）** を厳密に分離する。
 * 各サイト（BizReach, Green, LinkedIn, Wantedly, Doda, リクナビNEXT 等）は共通I/Fを持つ独立モジュールとして追加可能。
-* **SOLID原則**に従い、変更容易性・拡張性を抵保する。
+* **SOLID原則**に従い、変更容易性・拡張性を担保する。
 
 
 ## 【あなた（ChatGPT）の回答方針／出力ルール】
@@ -69,7 +69,8 @@
 
 **対象**: 求人サイト（BizReach等）から取得した候補者レジュメ（PDF/CSV/JSON）。
 **出力**: 候補者ごとの **サイト非依存JSON** ＋ **スクリーニング結果（CSV/JSON）**。
-**求人の募集要項**: Lazuli_CS_JD.mdに記載。
+**候補者のレジュメサンプル**:hr\candidates.jsonlに記載。
+**求人の募集要項**: hr\Lazuli_CS_JD.mdに記載。
 
 
 
@@ -102,7 +103,7 @@
 | --------------------- | ------------------------------------- |
 | `ResumeAdapter`       | 各サイト固有レジュメを provider-neutral JSON に変換 |
 | `CandidateNormalizer` | データ形式の正規化（日時・数値・テキスト整形）               |
-| `TenureEvaluator`     | 在籌期間計算・ジョブホッパー判定                      |
+| `TenureEvaluator`     | 在籍期間計算・ジョブホッパー判定                      |
 | `SalaryEvaluator`     | 希望年収と求人年収のマッチング評価                     |
 | `JDMatcher`           | JDとのキーワードマッチ評価                        |
 | `ScreeningCore`       | 上記Evaluatorを統合し最終スコア算出                |
@@ -211,9 +212,6 @@ class BizReachAdapter(ResumeAdapter):
 * 各社在籍期間（月）を算出。
 * 平均 < 18ヶ月 かつ直近3社中2社 < 12ヶ月 → 除外。
 * 契約/フリーランスは平均 >= 12ヶ月で通過。
-* 雇用形態フラグ（`experiences[].employment_type`）はアダプタ側で `full_time` / `contract` / `freelance` / `intern` / `unknown` に正規化されていることを前提とし、欠落時は `unknown` として扱う。
-* 同一期間に重複する在職データは月単位でマージし、重複カウントを避けたうえで平均在籍期間を算出する。
-* 開始・終了年月が欠落している職歴は在籍期間算出の対象外とし、計算対象外とした理由を監査ログに記録する。
 
 ### SalaryEvaluator
 
@@ -638,3 +636,9 @@ Temperature = 0.
 * 同義語過多でノイズ: 展開深さを制限、IDF 閾値で低情報語を除外
 
 ---
+
+## 12. 実装状況（2025-02-15）
+
+- Python パッケージ構成を `pyproject.toml`（`src/` 配下モジュール、`tests/`）で整備。`pdf` / `nlp` / `ml` オプション依存を分離。
+- Pydantic v2 ベースの `CandidateProfile` / `JobDescription` スキーマと付随サブモデルを実装（`src/hrscreening/schemas/`）。
+- スキーマ挙動を検証する pytest を追加（`tests/schemas/test_candidate_profile.py`）。デフォルト値とバリデーションの RED→GREEN を確認済み。
