@@ -642,3 +642,5 @@ Temperature = 0.
 - Python パッケージ構成を `pyproject.toml`（`src/` 配下モジュール、`tests/`）で整備。`pdf` / `nlp` / `ml` オプション依存を分離。
 - Pydantic v2 ベースの `CandidateProfile` / `JobDescription` スキーマと付随サブモデルを実装（`src/hrscreening/schemas/`）。
 - スキーマ挙動を検証する pytest を追加（`tests/schemas/test_candidate_profile.py`）。デフォルト値とバリデーションの RED→GREEN を確認済み。
+- `ScreeningCore` を実装し、Evaluator 結果の集約・重み付け・ハードゲート判定（言語/勤務地/ビザ/給与）と意思決定ロジックを整備（`src/hrscreening/core/screening.py`）。
+- コアの TDD テストを追加（`tests/core/test_screening_core.py`）し、重み付け計算とハードゲート動作を確認。
