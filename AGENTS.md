@@ -644,3 +644,5 @@ Temperature = 0.
 - スキーマ挙動を検証する pytest を追加（`tests/schemas/test_candidate_profile.py`）。デフォルト値とバリデーションの RED→GREEN を確認済み。
 - `ScreeningCore` を実装し、Evaluator 結果の集約・重み付け・ハードゲート判定（言語/勤務地/ビザ/給与）と意思決定ロジックを整備（`src/hrscreening/core/screening.py`）。
 - コアの TDD テストを追加（`tests/core/test_screening_core.py`）し、重み付け計算とハードゲート動作を確認。
+- TenureEvaluator / SalaryEvaluator / JDMatcher を実装し、安定勤務・給与マッチ・キーワード網羅率の評価ロジックを追加（`src/hrscreening/core/evaluators/`）。
+- 各 Evaluator の単体テストを整備（`tests/core/test_tenure_evaluator.py`、`test_salary_evaluator.py`、`test_jd_matcher.py`）。

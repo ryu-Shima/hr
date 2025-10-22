@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+# NOTE: keep imports explicit for export clarity.
 from .screening import (
     AggregateScores,
     DecisionSummary,
@@ -11,6 +12,7 @@ from .screening import (
     ScreeningCore,
     ScreeningOutcome,
 )
+from .evaluators import JDMatcher, SalaryEvaluator, TenureEvaluator
 
 
 @runtime_checkable
@@ -28,5 +30,7 @@ __all__ = [
     "EvaluationResult",
     "AggregateScores",
     "DecisionSummary",
+    "TenureEvaluator",
+    "SalaryEvaluator",
+    "JDMatcher",
 ]
-

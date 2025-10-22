@@ -5,6 +5,7 @@ from __future__ import annotations
 from .candidate import (
     CandidateProfile,
     CandidateSkillAggregate,
+    ExperienceEntry,
     LanguageProficiency,
 )
 from .job import JobDescription
@@ -14,4 +15,5 @@ __all__ = [
     "CandidateSkillAggregate",
     "JobDescription",
     "LanguageProficiency",
+    "ExperienceEntry",
 ]
