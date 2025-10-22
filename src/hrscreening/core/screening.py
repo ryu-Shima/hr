@@ -52,10 +52,13 @@ class ScreeningCore:
     """Coordinates evaluators and aggregates scoring decisions."""
 
     DEFAULT_WEIGHTS: dict[str, float] = {
-        "bm25_prox": 0.45,
-        "embed_sim": 0.40,
-        "sim_title": 0.10,
-        "title_bonus": 0.05,
+        "bm25_prox": 0.40,
+        "embed_sim": 0.35,
+        "sim_title": 0.08,
+        "title_bonus": 0.07,
+        "tenure_pass": 0.04,
+        "salary_pass": 0.04,
+        "jd_pass": 0.02,
     }
 
     DEFAULT_THRESHOLDS: dict[DecisionType, float] = {

@@ -646,3 +646,4 @@ Temperature = 0.
 - コアの TDD テストを追加（`tests/core/test_screening_core.py`）し、重み付け計算とハードゲート動作を確認。
 - TenureEvaluator / SalaryEvaluator / JDMatcher を実装し、安定勤務・給与マッチ・キーワード網羅率の評価ロジックを追加（`src/hrscreening/core/evaluators/`）。
 - 各 Evaluator の単体テストを整備（`tests/core/test_tenure_evaluator.py`、`test_salary_evaluator.py`、`test_jd_matcher.py`）。
+- ScreeningCore のデフォルト重みを拡張し、`tenure_pass` / `salary_pass` / `jd_pass` を事前スコアに寄与させるよう更新。

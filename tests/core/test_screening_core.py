@@ -66,7 +66,17 @@ def test_screening_core_aggregates_scores_and_weighs():
             scores={"embed_sim": 0.8, "sim_title": 0.7},
         )
     )
-    core = ScreeningCore(evaluators=[evaluator_a, evaluator_b])
+    evaluator_c = StubEvaluator(
+        StubEvaluatorResult(
+            method="jd_rule",
+            scores={
+                "tenure_pass": 1.0,
+                "salary_pass": 1.0,
+                "jd_pass": 1.0,
+            },
+        )
+    )
+    core = ScreeningCore(evaluators=[evaluator_a, evaluator_b, evaluator_c])
     candidate = build_candidate(
         languages=[LanguageProficiency(language="日本語", level="ネイティブ")]
     )
@@ -76,15 +86,24 @@ def test_screening_core_aggregates_scores_and_weighs():
 
     result = core.evaluate(candidate=candidate, job=job)
 
-    assert evaluator_a.calls and evaluator_b.calls
+    assert evaluator_a.calls and evaluator_b.calls and evaluator_c.calls
     assert result.aggregate.scores == {
         "bm25_prox": 1.2,
         "title_bonus": 0.1,
         "embed_sim": 0.8,
         "sim_title": 0.7,
+        "tenure_pass": 1.0,
+        "salary_pass": 1.0,
+        "jd_pass": 1.0,
     }
     expected = (
-        0.45 * 1.2 + 0.05 * 0.1 + 0.40 * 0.8 + 0.10 * 0.7
+        0.40 * 1.2
+        + 0.07 * 0.1
+        + 0.35 * 0.8
+        + 0.08 * 0.7
+        + 0.04 * 1.0
+        + 0.04 * 1.0
+        + 0.02 * 1.0
     )
     assert pytest.approx(expected, rel=1e-6) == result.aggregate.pre_llm_score
     assert result.decision.decision == "pass"
@@ -109,5 +128,4 @@ def test_screening_core_applies_hard_gates_language():
     assert outcome.decision.decision == "reject"
     assert "language" in outcome.decision.hard_failures
     assert outcome.decision.hard_gate_flags["language_ok"] is False
-    assert outcome.decision.pre_llm_score == pytest.approx(0.225)
-
+    assert outcome.decision.pre_llm_score == pytest.approx(0.20)
