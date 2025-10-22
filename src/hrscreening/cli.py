@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 
+import yaml
+
 from .container import create_container
+from .logging import configure_logging
 
 app = typer.Typer(help="Candidate resume screening CLI.")
 
@@ -25,9 +28,21 @@ def run(
         help="Output JSON path.",
     ),
     as_of: Optional[str] = typer.Option(None, help="Reference date (YYYY-MM or ISO) for tenure calculations."),
+    config: Optional[Path] = typer.Option(None, exists=True, readable=True, dir_okay=False, help="YAML config path."),
+    log_level: str = typer.Option("INFO", help="Log level for structured logging."),
 ) -> None:
     """Run the screening pipeline."""
-    container = create_container()
+    settings: dict[str, Any] = {}
+    if config:
+        with config.open("r", encoding="utf-8") as handle:
+            loaded = yaml.safe_load(handle) or {}
+            if not isinstance(loaded, dict):
+                raise typer.BadParameter("Config file must be a YAML object", param_name="config")
+            settings = loaded
+
+    configure_logging(log_level)
+
+    container = create_container(settings=settings)
     pipeline = container.pipeline()
     results = pipeline.run(
         candidates_path=candidates,

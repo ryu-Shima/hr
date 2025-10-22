@@ -98,3 +98,5 @@ def test_cli_runs_pipeline_and_writes_output(tmp_path: Path, runner: CliRunner) 
     assert candidate_result["decision"]["decision"] == "pass"
     assert candidate_result["aggregate"]["pre_llm_score"] >= 0.5
     assert candidate_result["evaluations"], "evaluations should not be empty"
+    assert "llm_payload" in candidate_result
+    assert candidate_result["llm_payload"]["job_id"] == "JD-001"

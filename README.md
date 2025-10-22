@@ -29,3 +29,23 @@ py -m hrscreening.cli --candidates data/candidates.jsonl --job data/job.json --o
 ```
 
 `--as-of` オプションで在籍期間計算の基準日（`YYYY-MM` など）を上書き可能です。
+
+### 設定ファイルとログ制御
+
+- `--config config.yaml` で YAML 設定を読み込み、`core.score_weights` や `evaluators.bm25` などを上書きできます。
+- `--log-level DEBUG` のように指定すると、`structlog` による JSON ログの冗長さを調整できます。
+
+サンプル設定:
+
+```yaml
+core:
+  score_weights:
+    bm25_prox: 0.5
+    embed_sim: 0.3
+evaluators:
+  bm25:
+    k1: 1.5
+    window: 6
+  embed:
+    top_k: 5
+```

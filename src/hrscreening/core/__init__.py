@@ -12,7 +12,13 @@ from .screening import (
     ScreeningCore,
     ScreeningOutcome,
 )
-from .evaluators import JDMatcher, SalaryEvaluator, TenureEvaluator
+from .evaluators import (
+    BM25ProximityEvaluator,
+    EmbeddingSimilarityEvaluator,
+    JDMatcher,
+    SalaryEvaluator,
+    TenureEvaluator,
+)
 
 
 @runtime_checkable
@@ -33,4 +39,6 @@ __all__ = [
     "TenureEvaluator",
     "SalaryEvaluator",
     "JDMatcher",
+    "BM25ProximityEvaluator",
+    "EmbeddingSimilarityEvaluator",
 ]

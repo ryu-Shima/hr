@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import Iterable, List
 
 import pendulum
+import structlog
 
 from .adapters import BizReachAdapter, ResumeAdapter
 from .core import ScreeningCore
+from .llm import build_llm_payload
 from .schemas import CandidateProfile, JobDescription
 
 
@@ -94,6 +96,7 @@ class ScreeningPipeline:
         self._candidates = candidate_loader or CandidateLoader(registry)
         self._jobs = job_loader or JobLoader()
         self._writer = writer or OutputWriter()
+        self._logger = structlog.get_logger(__name__)
 
     def run(
         self,
@@ -106,21 +109,34 @@ class ScreeningPipeline:
         job = self._jobs.load(job_path)
         candidates = self._candidates.load(candidates_path)
 
-        results = [
-            self._core.evaluate(
+        serialized_results: list[dict] = []
+
+        for candidate in candidates:
+            outcome = self._core.evaluate(
                 candidate=candidate,
                 job=job,
                 context={"as_of": as_of} if as_of else None,
             )
-            for candidate in candidates
-        ]
+            llm_payload = build_llm_payload(job=job, candidate=candidate, outcome=outcome)
 
-        payload = [asdict(result) for result in results]
-        serialized = json.loads(
-            json.dumps(payload, default=_json_default, ensure_ascii=False)
-        )
-        self._writer.write(output_path, serialized)
-        return serialized
+            outcome_dict = asdict(outcome)
+            outcome_dict["llm_payload"] = llm_payload
+
+            serialized_entry = json.loads(
+                json.dumps(outcome_dict, default=_json_default, ensure_ascii=False)
+            )
+            serialized_results.append(serialized_entry)
+
+            self._logger.info(
+                "screening.result",
+                candidate_id=candidate.candidate_id,
+                job_id=job.job_id,
+                decision=outcome.decision.decision,
+                pre_llm_score=outcome.aggregate.pre_llm_score,
+            )
+
+        self._writer.write(output_path, serialized_results)
+        return serialized_results
 
 
 def default_registry() -> AdapterRegistry:
