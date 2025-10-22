@@ -72,6 +72,19 @@ def create_container(*, settings: dict | None = None) -> ScreeningContainer:
     core_settings = settings.get("core", {}) if isinstance(settings, dict) else {}
     if core_settings:
         container.config.override(core_settings)
+        core_kwargs: dict[str, object] = {}
+        if "score_weights" in core_settings:
+            core_kwargs["score_weights"] = core_settings["score_weights"]
+        if "thresholds" in core_settings:
+            core_kwargs["thresholds"] = core_settings["thresholds"]
+        if core_kwargs:
+            container.screening_core.override(
+                providers.Singleton(
+                    ScreeningCore,
+                    evaluators=container.evaluators,
+                    **core_kwargs,
+                )
+            )
 
     evaluator_settings = settings.get("evaluators", {}) if isinstance(settings, dict) else {}
 

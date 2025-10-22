@@ -1,8 +1,12 @@
-"""Helpers for constructing LLM rerank payloads."""
+"""Helpers for constructing LLM rerank payloads and clients."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
+from urllib import error, request
+
+import structlog
 
 from .core.screening import ScreeningOutcome
 from .schemas import CandidateProfile, JobDescription
@@ -41,6 +45,34 @@ def build_llm_payload(
     }
 
 
+class HTTPLLMClient:
+    """Simple HTTP client for LLM rerank API."""
+
+    def __init__(self, endpoint: str | None, api_key: str | None = None, *, timeout: float = 10.0):
+        self._endpoint = endpoint
+        self._api_key = api_key
+        self._timeout = timeout
+        self._logger = structlog.get_logger(__name__)
+
+    def rerank(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        if not self._endpoint:
+            return None
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+
+        req = request.Request(self._endpoint, data=data, headers=headers, method="POST")
+        try:
+            with request.urlopen(req, timeout=self._timeout) as resp:
+                body = resp.read().decode("utf-8")
+                return json.loads(body) if body else {}
+        except error.URLError as exc:  # pragma: no cover - error path
+            self._logger.warning("llm.request_failed", error=str(exc))
+            return None
+
+
+
 def _find_evaluation(outcome: ScreeningOutcome, method: str) -> dict[str, Any] | None:
     for evaluation in outcome.evaluations:
         if evaluation.method == method:
@@ -74,4 +106,3 @@ def _extract_embed_metadata(embed: dict[str, Any] | None) -> dict[str, Any]:
         "sim_title": embed["scores"].get("sim_title", 0.0),
         "evidence_pairs_top": evidence[:3],
     }
-
