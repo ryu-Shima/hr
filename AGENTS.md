@@ -673,5 +673,5 @@ Temperature = 0.
 - 候補者/求人入力のバリデーションと部分成功ハンドリングを実装、出力 JSON にメタ情報（処理エラー・タイムスタンプ・バージョン）を付与。
 - YAML 設定は Pydantic スキーマで検証し、BM25/Embedding Evaluator にシノニム拡張やパラメータ調整を設定化。
 - PDF レジュメを `convert-pdf` コマンドで Markdown 抽出→JSONL 変換できるよう整備。余計な注意書きは除去し、最低限の候補者スキーマに整形。
-- BizReach PDF 変換で `職務経歴` セクションのプレーンテキスト行から会社名・在籍期間・タイトルを正しく抽出し、複数行に分割された箇条書きを連結して `CandidateProfile.experiences` を常に充足するよう改修（`src/hrscreening/markdown_to_jsonl.py`、`tests/markdown/test_markdown_to_jsonl.py`）。
+- BizReach PDF 変換で `職務経歴` セクションから会社名・在籍期間（start/end）・所属部署（title）・業務内容全文（summary）を正規化し、複数行に分割された箇条書きも連結したうえで `CandidateProfile.experiences` を常に充足するよう改修（`src/hrscreening/markdown_to_jsonl.py`、`tests/markdown/test_markdown_to_jsonl.py`）。
 

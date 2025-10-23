@@ -77,14 +77,14 @@ def test_markdown_to_records_plain_company_lines():
 
     first = experiences[0]
     assert first['company'] == 'フリー株式会社（freee株式会社）'
-    assert first['title'] == '導入伴走支援'
+    assert first['title'] == 'パートナー事業部'
     assert first['start'] == '2023-12'
     assert first['end'] is None
     assert 'リード獲得の企画立案' in first['bullets']
 
     second = experiences[1]
     assert second['company'] == '株式会社電通デジタル'
-    assert second['title'] == 'ダイレクトアカウントプランナー'
+    assert second['title'] == 'ダイレクトアカウントプランニング部'
     assert second['start'] == '2023-01'
     assert second['end'] == '2023-11'
     assert second['bullets'] == ['競合コンペ勝率80%']

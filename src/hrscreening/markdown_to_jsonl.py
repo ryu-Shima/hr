@@ -17,6 +17,7 @@ DATE_RANGE_CONTEXT_RE = re.compile(
     r"(?P<prefix>.*?)(?P<start_year>\d{4})年(?P<start_month>\d{1,2})月\s*[〜~\-]\s*"
     r"(?:(?P<end_year>\d{4})年(?P<end_month>\d{1,2})月|現在)(?P<suffix>.*)"
 )
+PURE_DATE_LINE_RE = re.compile(r"^\s*\d{4}年\d{1,2}月\s*[〜~\-]\s*(?:\d{4}年\d{1,2}月|現在)\s*$")
 COMPANY_KEYWORDS = (
     "株式会社",
     "有限会社",
@@ -280,24 +281,24 @@ def _extract_experiences(section_lines: Sequence[str]) -> list[dict]:
         return experiences
     lines = list(section_lines)
     seen: set[tuple[str | None, str | None, str | None, str | None]] = set()
-    i = 0
-    while i < len(lines):
-        stripped = _strip_strikethrough(lines[i].strip())
+    index = 0
+    while index < len(lines):
+        stripped = _strip_strikethrough(lines[index].strip())
         if not stripped:
-            i += 1
+            index += 1
             continue
         if _is_company_header(stripped):
-            entry, advance = _parse_company_block(lines, i)
+            entry, next_index = _parse_company_block(lines, index)
             if entry:
                 key = (entry["company"], entry["start"], entry["end"], entry["title"])
                 if key not in seen:
                     seen.add(key)
                     experiences.append(entry)
-            if advance <= i:
-                advance = i + 1
-            i = advance
+            if next_index <= index:
+                next_index = index + 1
+            index = next_index
             continue
-        i += 1
+        index += 1
     return experiences
 
 
@@ -316,124 +317,79 @@ def _is_company_header(line: str) -> bool:
 
 
 def _parse_company_block(lines: Sequence[str], start_index: int) -> tuple[dict | None, int]:
-    company_raw = _strip_strikethrough(lines[start_index].strip())
-    company = company_raw.strip("【】").strip()
-    j = start_index + 1
-    prelude: list[str] = []
+    raw_company = lines[start_index]
+    company_line = _strip_strikethrough(raw_company.strip())
+    company_name, line_start, line_end = _split_company_line(company_line)
+    company = company_name or company_line.strip("【】").strip()
+
+    index = start_index + 1
     title: str = ""
-    start: str | None = None
-    end: str | None = None
-    summary_parts: list[str] = []
-    bullets: list[str] = []
+    start = line_start
+    end = line_end
 
-    while j < len(lines):
-        current_raw = lines[j]
-        current = _strip_strikethrough(current_raw.strip())
-        if not current:
-            j += 1
+    # capture department / title line
+    index = _skip_blank_lines(lines, index)
+    if index < len(lines):
+        dept_candidate_raw = lines[index]
+        dept_candidate = _strip_strikethrough(dept_candidate_raw.strip())
+        if dept_candidate and not _contains_date(dept_candidate) and not _is_company_header(dept_candidate):
+            title = _clean_context_text(dept_candidate)
+            index += 1
+
+    index = _skip_blank_lines(lines, index)
+
+    # optional job line containing dates (to skip from summary but use for dates)
+    if index < len(lines):
+        role_line_raw = lines[index]
+        role_line = _strip_strikethrough(role_line_raw.strip())
+        role_start, role_end = _extract_dates_from_text(role_line)
+        if role_start or role_end:
+            if start is None:
+                start = role_start
+            if end is None:
+                end = role_end
+            # skip this line entirely from summary per spec
+            index += 1
+
+    summary_lines: list[str] = []
+    bullet_lines: list[str] = []
+
+    while index < len(lines):
+        raw_line = lines[index]
+        stripped = _strip_strikethrough(raw_line.strip())
+        if not stripped:
+            summary_lines.append("")
+            index += 1
             continue
-        if _is_section_terminator(current) or (_is_company_header(current) and current != company_raw):
+        if _is_section_terminator(stripped) or _is_company_header(stripped):
             break
-        context = _split_date_context(current)
-        if context:
-            prefix, ctx_start, ctx_end, suffix = context
-            if ctx_start:
-                start = start or ctx_start
-            if ctx_end is not None:
-                end = end or ctx_end
-            prefix_clean = _clean_context_text(prefix)
-            suffix_clean = _clean_context_text(suffix)
-            if prefix_clean:
-                title = title or prefix_clean
-            if suffix_clean:
-                summary_parts.append(suffix_clean)
-            j += 1
-            break
-        prelude.append(current)
-        j += 1
-
-    department: str | None = None
-    if prelude:
-        department = _clean_context_text(prelude[0])
-        for extra in prelude[1:]:
-            cleaned_extra = _clean_context_text(extra)
-            if cleaned_extra:
-                summary_parts.append(cleaned_extra)
-
-    while j < len(lines):
-        current_raw = lines[j]
-        current = _strip_strikethrough(current_raw.strip())
-        if not current:
-            j += 1
+        if PURE_DATE_LINE_RE.match(stripped):
+            index += 1
             continue
-        if _is_section_terminator(current) or _is_company_header(current):
-            break
-        context = _split_date_context(current)
-        if context:
-            prefix, ctx_start, ctx_end, suffix = context
-            if ctx_start:
-                start = start or ctx_start
-            if ctx_end is not None:
-                end = end or ctx_end
-            prefix_clean = _clean_context_text(prefix)
-            suffix_clean = _clean_context_text(suffix)
-            if prefix_clean and not title:
-                title = prefix_clean
-            if suffix_clean:
-                summary_parts.append(suffix_clean)
-            j += 1
-            continue
-        if BULLET_RE.match(current_raw):
-            bullet = BULLET_RE.sub("", current_raw).strip()
-            bullet = _clean_context_text(bullet)
-            continuation_index = j + 1
-            continuation_parts: list[str] = []
-            while continuation_index < len(lines):
-                continuation_raw = lines[continuation_index]
-                continuation = _strip_strikethrough(continuation_raw.strip())
-                if not continuation:
-                    continuation_index += 1
-                    continue
-                if (
-                    BULLET_RE.match(continuation_raw)
-                    or _is_section_terminator(continuation)
-                    or _is_company_header(continuation)
-                    or _split_date_context(continuation)
-                ):
-                    break
-                cleaned_continuation = _clean_context_text(continuation)
-                if cleaned_continuation:
-                    continuation_parts.append(cleaned_continuation)
-                continuation_index += 1
-            if continuation_parts:
-                bullet = " ".join([bullet] + continuation_parts).strip()
-            if bullet and bullet not in bullets:
-                bullets.append(bullet)
-            j = continuation_index
-            continue
-        summary_parts.append(_clean_context_text(current))
-        j += 1
+        summary_line = _clean_summary_line(raw_line)
+        summary_lines.append(summary_line)
+        if BULLET_RE.match(raw_line):
+            bullet_entry = summary_line.lstrip("・- ").strip()
+            if bullet_entry:
+                bullet_lines.append(bullet_entry)
+        index += 1
 
-    summary_parts = _unique_preserve(summary_parts)
-    bullets = _unique_preserve(bullets)
+    summary_text = "\n".join(line for line in summary_lines if line is not None).strip()
+    bullets = _unique_preserve(bullet_lines)
 
-    summary = "\n".join(part for part in summary_parts if part).strip()
-    if department:
-        dept_line = f"部署: {department}"
-        summary = f"{dept_line}\n{summary}" if summary else dept_line
-    if not summary and bullets:
-        summary = "\n".join(bullets)
+    if not summary_text and bullets:
+        summary_text = "\n".join(bullets)
 
     entry = {
         "company": company,
-        "title": title or "",
+        "title": title,
         "start": start,
         "end": end,
         "employment_type": None,
-        "summary": summary,
+        "summary": summary_text,
         "bullets": bullets,
     }
-    return entry, j
+    return entry, index
 
 
 def _is_section_terminator(text: str) -> bool:
@@ -443,6 +399,31 @@ def _is_section_terminator(text: str) -> bool:
         return True
     clean = text.lstrip("#").strip()
     return bool(CANDIDATE_ID_RE.match(clean))
+
+
+def _skip_blank_lines(lines: Sequence[str], index: int) -> int:
+    while index < len(lines):
+        candidate = _strip_strikethrough(lines[index].strip())
+        if candidate:
+            break
+        index += 1
+    return index
+
+
+def _split_company_line(text: str) -> tuple[str, str | None, str | None]:
+    start = None
+    end = None
+    match = DATE_RANGE_CONTEXT_RE.search(text)
+    if match:
+        start = _format_year_month(match.group("start_year"), match.group("start_month"))
+        if match.group("end_year"):
+            end = _format_year_month(match.group("end_year"), match.group("end_month"))
+        remaining = f"{match.group('prefix') or ''}{match.group('suffix') or ''}"
+        company = remaining.strip()
+    else:
+        company = text
+    company = company.strip("【】").strip()
+    return company, start, end
 
 
 def _split_date_context(text: str) -> tuple[str, str | None, str | None, str] | None:
@@ -456,12 +437,28 @@ def _split_date_context(text: str) -> tuple[str, str | None, str | None, str] | 
     return match.group("prefix") or "", start, end, match.group("suffix") or ""
 
 
+def _extract_dates_from_text(text: str) -> tuple[str | None, str | None]:
+    match = DATE_RANGE_CONTEXT_RE.search(text)
+    if not match:
+        return None, None
+    start = _format_year_month(match.group("start_year"), match.group("start_month"))
+    end = None
+    if match.group("end_year"):
+        end = _format_year_month(match.group("end_year"), match.group("end_month"))
+    return start, end
+
+
 def _clean_context_text(text: str) -> str:
     if not text:
         return ""
     cleaned = PAREN_STRIP_RE.sub("", text)
     cleaned = cleaned.strip()
     cleaned = cleaned.strip("：:・-／/　")
+    return cleaned.strip()
+
+
+def _clean_summary_line(text: str) -> str:
+    cleaned = _strip_strikethrough(text)
     return cleaned.strip()
 
 
@@ -483,6 +480,10 @@ def _strip_strikethrough(text: str) -> str:
     return STRIKE_RE.sub(r"\1", text)
 def _format_year_month(year: str, month: str) -> str:
     return f"{int(year):04d}-{int(month):02d}"
+
+
+def _contains_date(text: str) -> bool:
+    return bool(DATE_RANGE_CONTEXT_RE.search(text))
 
 
 __all__ = ["pdf_to_jsonl", "markdown_to_records"]
