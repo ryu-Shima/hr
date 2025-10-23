@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from .schemas import CandidateProfile, LanguageProficiency
+from .schemas import CandidateConstraints, CandidateProfile, LanguageProficiency
 from .pdf_utils import extract_markdown
 
 CANDIDATE_ID_RE = re.compile(r"^BU\d{7}$")
@@ -35,6 +35,7 @@ COMPANY_KEYWORDS = (
     "学校法人",
 )
 PAREN_STRIP_RE = re.compile(r"[()（）]")
+HOPE_LOCATION_PATTERN = re.compile(r"希望勤務地[：:]\s*(.+)")
 
 OVERVIEW_KEYS = [
     "所属企業一覧",
@@ -115,7 +116,6 @@ def _lines_to_candidate(candidate_id: str, lines: list[str]) -> dict:
 
     gender = None
     age = None
-    location = None
     for line in lines:
         match = GENDER_LINE_RE.search(line)
         if match:
@@ -124,7 +124,6 @@ def _lines_to_candidate(candidate_id: str, lines: list[str]) -> dict:
                 age = int(match.group(2))
             except ValueError:
                 age = None
-            location = match.group(3).split("出力日時")[0].strip()
             break
 
     overview_data = _extract_keyed_items(sections.get("職務経歴概要", []), OVERVIEW_KEYS)
@@ -156,12 +155,14 @@ def _lines_to_candidate(candidate_id: str, lines: list[str]) -> dict:
     if academic_overview:
         provider_fields["学歴/語学"] = academic_overview
 
+    desired_locations = _extract_desired_locations(sections)
+    constraints = CandidateConstraints(location=desired_locations) if desired_locations else None
+
     profile = CandidateProfile(
         provider="bizreach",
         candidate_id=candidate_id,
         gender=gender,
         age=age,
-        location=location,
         contact={"email": None, "phone": None},
         education=education,
         experiences=experiences,
@@ -171,6 +172,7 @@ def _lines_to_candidate(candidate_id: str, lines: list[str]) -> dict:
         awards=awards,
         notes=notes,
         provider_raw={"text": "\n".join(lines).strip(), "fields": provider_fields},
+        constraints=constraints,
     )
     raw = profile.model_dump(mode="python", exclude_none=True)
     return _prune_empty(raw)
@@ -453,6 +455,24 @@ def _clean_context_text(text: str) -> str:
 def _clean_summary_line(text: str) -> str:
     cleaned = _strip_strikethrough(text)
     return cleaned.strip()
+
+
+def _extract_desired_locations(sections: dict[str, list[str]]) -> list[str]:
+    locations: list[str] = []
+    for lines in sections.values():
+        for raw_line in lines:
+            stripped = _strip_strikethrough(raw_line.strip())
+            if not stripped:
+                continue
+            match = HOPE_LOCATION_PATTERN.search(stripped)
+            if not match:
+                continue
+            tokens = re.split(r"[、,/・\s]+", match.group(1))
+            for token in tokens:
+                cleaned = token.strip()
+                if cleaned:
+                    locations.append(cleaned)
+    return _unique_preserve(locations)
 
 
 def _unique_preserve(items: Sequence[str]) -> list[str]:

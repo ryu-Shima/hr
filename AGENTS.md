@@ -674,4 +674,5 @@ Temperature = 0.
 - YAML 設定は Pydantic スキーマで検証し、BM25/Embedding Evaluator にシノニム拡張やパラメータ調整を設定化。
 - PDF レジュメを `convert-pdf` コマンドで Markdown 抽出→JSONL 変換できるよう整備。余計な注意書きは除去し、最低限の候補者スキーマに整形。
 - BizReach PDF 変換で `職務経歴` セクションから会社名・在籍期間（start/end）・所属部署（title）・業務内容全文（summary）を正規化し、複数行に分割された箇条書きも連結したうえで `CandidateProfile.experiences` を常に充足するよう改修（`src/hrscreening/markdown_to_jsonl.py`、`tests/markdown/test_markdown_to_jsonl.py`）。
+- 日本語・ビザのハードゲートを撤廃し、勤務地条件を緩和して給与ゲート詳細を結果 JSON と監査ログに記録、JD キーワード評価をヒット数に応じた加点方式へ移行（`src/hrscreening/markdown_to_jsonl.py`、`src/hrscreening/core/screening.py`、`src/hrscreening/core/evaluators/jd_matcher.py`、`src/hrscreening/pipeline.py`）。
 

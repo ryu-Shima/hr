@@ -174,6 +174,7 @@ class ScreeningPipeline:
                         "pre_llm_score": outcome.aggregate.pre_llm_score,
                         "decision": outcome.decision.decision,
                         "hard_gate_flags": outcome.decision.hard_gate_flags,
+                        "hard_gate_details": outcome.decision.hard_gate_details,
                         "llm_payload": llm_payload,
                     }
                 )
@@ -184,6 +185,8 @@ class ScreeningPipeline:
                 job_id=job.job_id,
                 decision=outcome.decision.decision,
                 pre_llm_score=outcome.aggregate.pre_llm_score,
+                hard_gate_flags=outcome.decision.hard_gate_flags,
+                hard_gate_details=outcome.decision.hard_gate_details,
             )
 
         metadata = {

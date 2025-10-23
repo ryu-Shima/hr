@@ -34,6 +34,7 @@ class DecisionSummary:
     decision: DecisionType
     pre_llm_score: float
     hard_gate_flags: dict[str, bool]
+    hard_gate_details: dict[str, Any]
     hard_failures: list[str]
 
 
@@ -68,9 +69,7 @@ class ScreeningCore:
     }
 
     _HARD_GATE_LABELS: dict[str, str] = {
-        "language_ok": "language",
         "location_ok": "location",
-        "visa_ok": "visa",
         "salary_ok": "salary",
     }
 
@@ -113,7 +112,7 @@ class ScreeningCore:
             pre_llm_score=pre_llm_score,
         )
 
-        hard_gate_flags = self._evaluate_hard_gates(candidate, job)
+        hard_gate_flags, hard_gate_details = self._evaluate_hard_gates(candidate, job)
         hard_failures = [
             self._HARD_GATE_LABELS.get(k, k)
             for k, ok in hard_gate_flags.items()
@@ -125,6 +124,7 @@ class ScreeningCore:
             decision=final_decision,
             pre_llm_score=pre_llm_score,
             hard_gate_flags=hard_gate_flags,
+            hard_gate_details=hard_gate_details,
             hard_failures=hard_failures,
         )
 
@@ -171,102 +171,56 @@ class ScreeningCore:
         self,
         candidate: CandidateProfile,
         job: JobDescription,
-    ) -> dict[str, bool]:
+    ) -> tuple[dict[str, bool], dict[str, Any]]:
         constraints = job.constraints
-        candidate_constraints = candidate.constraints
 
-        return {
-            "language_ok": self._language_ok(candidate, constraints.language),
-            "location_ok": self._location_ok(candidate, constraints.location),
-            "visa_ok": self._visa_ok(candidate_constraints, constraints.visa),
-            "salary_ok": self._salary_ok(candidate, constraints.salary_range),
+        salary_ok, salary_detail = self._salary_gate(candidate, constraints.salary_range)
+
+        flags = {
+            "location_ok": True,
+            "salary_ok": salary_ok,
         }
-
+        details = {
+            "location": {
+                "status": "not_checked",
+                "required_locations": constraints.location,
+                "candidate_locations": [],
+                "matched_locations": [],
+            },
+            "salary": salary_detail,
+        }
+        return flags, details
     @staticmethod
-    def _language_ok(
+    def _salary_gate(
         candidate: CandidateProfile,
-        required_languages: list[str],
-    ) -> bool:
-        if not required_languages:
-            return True
-        candidate_langs = {
-            ScreeningCore._normalize_language(lang.language)
-            for lang in candidate.languages or []
-        }
-        if not candidate_langs:
-            return False
-
-        required = {
-            ScreeningCore._normalize_language(lang) for lang in required_languages
-        }
-        return bool(candidate_langs & required)
-
-    @staticmethod
-    def _location_ok(candidate: CandidateProfile, required_locations: list[str]) -> bool:
-        if not required_locations:
-            return True
-        if not candidate.location:
-            return False
-        candidate_location = candidate.location.strip().lower()
-        normalized_required = {loc.strip().lower() for loc in required_locations}
-        return candidate_location in normalized_required
-
-    @staticmethod
-    def _visa_ok(
-        candidate_constraints: Any,
-        required_visa: str | None,
-    ) -> bool:
-        if not required_visa:
-            return True
-        candidate_visa = None
-        if candidate_constraints and candidate_constraints.visa:
-            candidate_visa = candidate_constraints.visa.strip().lower()
-
-        if candidate_visa is None:
-            return False
-        if candidate_visa in {"ok", "valid", "yes"}:
-            return True
-        return candidate_visa == required_visa.strip().lower()
-
-    @staticmethod
-    def _salary_ok(candidate: CandidateProfile, salary_range: Any) -> bool:
-        if salary_range is None:
-            return True
-        min_required = salary_range.min_jpy
-        max_required = salary_range.max_jpy
-        if min_required is None and max_required is None:
-            return True
+        salary_range: Any,
+    ) -> tuple[bool, dict[str, Any]]:
+        min_required = getattr(salary_range, "min_jpy", None) if salary_range else None
+        max_required = getattr(salary_range, "max_jpy", None) if salary_range else None
 
         desired_min = candidate.desired_salary_min_jpy
         desired_max = candidate.desired_salary_max_jpy
 
-        if desired_min is None and desired_max is None:
-            return True
-
-        if desired_min is not None and max_required is not None:
-            if desired_min > max_required:
-                return False
-
-        if desired_max is not None and min_required is not None:
-            if desired_max < min_required:
-                return False
-
-        return True
-
-    @staticmethod
-    def _normalize_language(language: str) -> str:
-        if not language:
-            return ""
-        normalized = language.strip().lower()
-        aliases = {
-            "日本語": "ja",
-            "にほんご": "ja",
-            "japanese": "ja",
-            "jp": "ja",
-            "ja": "ja",
-            "英語": "en",
-            "えいご": "en",
-            "english": "en",
-            "en": "en",
+        detail = {
+            "required_range": {"min": min_required, "max": max_required},
+            "candidate_desired": {"min": desired_min, "max": desired_max},
         }
-        return aliases.get(normalized, normalized)
+
+        if min_required is None and max_required is None:
+            detail["status"] = "not_specified"
+            return True, detail
+
+        if desired_min is None and desired_max is None:
+            detail["status"] = "insufficient_candidate_data"
+            return True, detail
+
+        if desired_min is not None and max_required is not None and desired_min > max_required:
+            detail["status"] = "above_required_max"
+            return False, detail
+
+        if desired_max is not None and min_required is not None and desired_max < min_required:
+            detail["status"] = "below_required_min"
+            return False, detail
+
+        detail["status"] = "ok"
+        return True, detail

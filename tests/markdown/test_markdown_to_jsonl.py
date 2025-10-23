@@ -35,7 +35,8 @@ def test_markdown_to_records_basic():
     assert first['candidate_id'] == 'BU1234567'
     assert first['gender'] == '男性'
     assert first['age'] == 30
-    assert first['location'].startswith('東京都')
+    assert 'location' not in first
+    assert 'constraints' not in first
     assert first['skills'] == ['SaaS営業']
     assert first['experiences'][0]['company'] == '株式会社ABC'
     first_exp = first['experiences'][0]
@@ -70,6 +71,9 @@ BU0000001
 ダイレクトアカウントプランナー (2023年01月 〜 2023年11月)
 
 ・ 競合コンペ勝率80%
+
+## 特記事項
+希望勤務地：東京都
 """.strip()
 
 
@@ -78,6 +82,10 @@ def test_markdown_to_records_plain_company_lines():
     assert len(records) == 1
     experiences = records[0]['experiences']
     assert len(experiences) == 2
+
+    constraints = records[0].get('constraints')
+    assert constraints
+    assert constraints.get('location') == ['東京都']
 
     first = experiences[0]
     assert first['company'] == 'フリー株式会社（freee株式会社）'
