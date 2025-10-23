@@ -92,7 +92,10 @@ class ScreeningCore:
         context: dict[str, Any] | None = None,
     ) -> ScreeningOutcome:
         serialized_candidate = candidate.model_dump(mode="python")
-        evaluation_context = {"job": job.model_dump(mode="python")}
+        evaluation_context = {
+            "job": job.model_dump(mode="python"),
+            "evaluation_overrides": job.evaluation_overrides,
+        }
         if context:
             evaluation_context.update(context)
 
@@ -174,6 +177,11 @@ class ScreeningCore:
     ) -> tuple[dict[str, bool], dict[str, Any]]:
         constraints = job.constraints
 
+        candidate_locations = (
+            list(candidate.constraints.location)
+            if candidate.constraints and candidate.constraints.location
+            else []
+        )
         salary_ok, salary_detail = self._salary_gate(candidate, constraints.salary_range)
 
         flags = {
@@ -184,8 +192,8 @@ class ScreeningCore:
             "location": {
                 "status": "not_checked",
                 "required_locations": constraints.location,
-                "candidate_locations": [],
-                "matched_locations": [],
+                "candidate_locations": candidate_locations,
+                "matched_locations": candidate_locations,
             },
             "salary": salary_detail,
         }

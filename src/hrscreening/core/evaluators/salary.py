@@ -26,6 +26,8 @@ class SalaryEvaluator:
     def evaluate(self, candidate: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         profile = CandidateProfile.model_validate(candidate)
         job = JobDescription.model_validate(context["job"])
+        overrides = (context.get("evaluation_overrides") or {}).get("salary", {})
+        tolerance_ratio = overrides.get("tolerance_ratio", self._config.tolerance_ratio)
         desired_range = self._candidate_range(profile)
         job_range = self._job_range(job)
 
@@ -36,15 +38,16 @@ class SalaryEvaluator:
                 job_range=job_range,
                 message="insufficient_data",
                 status="insufficient_data",
+                tolerance_ratio=tolerance_ratio,
             )
 
         expanded_job_min = (
-            job_range[0] * (1 - self._config.tolerance_ratio)
+            job_range[0] * (1 - tolerance_ratio)
             if job_range[0] is not None
             else None
         )
         expanded_job_max = (
-            job_range[1] * (1 + self._config.tolerance_ratio)
+            job_range[1] * (1 + tolerance_ratio)
             if job_range[1] is not None
             else None
         )
@@ -73,6 +76,7 @@ class SalaryEvaluator:
             overlap_span=overlap_span,
             status=status,
             gap=gap,
+            tolerance_ratio=tolerance_ratio,
         )
 
     @staticmethod
@@ -142,6 +146,7 @@ class SalaryEvaluator:
         message: str | None = None,
         status: str | None = None,
         gap: int | None = None,
+        tolerance_ratio: float,
     ) -> dict[str, Any]:
         return {
             "method": self.method,
@@ -154,7 +159,7 @@ class SalaryEvaluator:
                 "job_range": job_range,
                 "expanded_job_range": expanded_job_range,
                 "overlap_span": overlap_span,
-                "tolerance_ratio": self._config.tolerance_ratio,
+                "tolerance_ratio": tolerance_ratio,
                 "message": message,
                 "status": status,
                 "gap_amount": gap,

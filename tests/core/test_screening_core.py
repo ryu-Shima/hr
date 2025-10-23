@@ -110,7 +110,7 @@ def test_screening_core_aggregates_scores_and_weighs():
     assert not result.decision.hard_failures
 
 
-def test_screening_core_applies_hard_gates_language():
+def test_screening_core_applies_salary_gate():
     evaluator = StubEvaluator(
         StubEvaluatorResult(
             method="bm25_proximity",
@@ -119,13 +119,18 @@ def test_screening_core_applies_hard_gates_language():
     )
     core = ScreeningCore(evaluators=[evaluator])
     candidate = build_candidate(
-        languages=[LanguageProficiency(language="英語", level="ビジネス")],
+        desired_salary_min_jpy=20_000_000,
+        desired_salary_max_jpy=21_000_000,
     )
-    job = build_job(constraints={"language": ["ja"]})
+    job = build_job(
+        constraints={
+            "salary_range": {"min_jpy": 7_000_000, "max_jpy": 12_000_000},
+        }
+    )
 
     outcome = core.evaluate(candidate=candidate, job=job)
 
     assert outcome.decision.decision == "reject"
-    assert "language" in outcome.decision.hard_failures
-    assert outcome.decision.hard_gate_flags["language_ok"] is False
-    assert outcome.decision.pre_llm_score == pytest.approx(0.20)
+    assert "salary" in outcome.decision.hard_failures
+    assert outcome.decision.hard_gate_flags["salary_ok"] is False
+    assert outcome.decision.hard_gate_flags["location_ok"] is True
