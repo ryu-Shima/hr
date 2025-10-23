@@ -172,7 +172,8 @@ def _lines_to_candidate(candidate_id: str, lines: list[str]) -> dict:
         notes=notes,
         provider_raw={"text": "\n".join(lines).strip(), "fields": provider_fields},
     )
-    return profile.model_dump(mode="python")
+    raw = profile.model_dump(mode="python", exclude_none=True)
+    return _prune_empty(raw)
 
 
 def _parse_sections(lines: list[str]) -> dict[str, list[str]]:
@@ -352,7 +353,6 @@ def _parse_company_block(lines: Sequence[str], start_index: int) -> tuple[dict |
             index += 1
 
     summary_lines: list[str] = []
-    bullet_lines: list[str] = []
 
     while index < len(lines):
         raw_line = lines[index]
@@ -368,17 +368,10 @@ def _parse_company_block(lines: Sequence[str], start_index: int) -> tuple[dict |
             continue
         summary_line = _clean_summary_line(raw_line)
         summary_lines.append(summary_line)
-        if BULLET_RE.match(raw_line):
-            bullet_entry = summary_line.lstrip("・- ").strip()
-            if bullet_entry:
-                bullet_lines.append(bullet_entry)
         index += 1
 
     summary_text = "\n".join(line for line in summary_lines if line is not None).strip()
-    bullets = _unique_preserve(bullet_lines)
-
-    if not summary_text and bullets:
-        summary_text = "\n".join(bullets)
+    bullets: list[str] = []
 
     entry = {
         "company": company,
@@ -480,6 +473,28 @@ def _strip_strikethrough(text: str) -> str:
     return STRIKE_RE.sub(r"\1", text)
 def _format_year_month(year: str, month: str) -> str:
     return f"{int(year):04d}-{int(month):02d}"
+
+def _prune_empty(value):
+    if isinstance(value, dict):
+        result: dict = {}
+        for key, item in value.items():
+            cleaned = _prune_empty(item)
+            if cleaned in (None, "", [], {}):
+                continue
+            result[key] = cleaned
+        return result
+    if isinstance(value, list):
+        cleaned_list = []
+        for item in value:
+            cleaned = _prune_empty(item)
+            if cleaned in (None, "", [], {}):
+                continue
+            cleaned_list.append(cleaned)
+        return cleaned_list
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped if stripped else ""
+    return value
 
 
 def _contains_date(text: str) -> bool:

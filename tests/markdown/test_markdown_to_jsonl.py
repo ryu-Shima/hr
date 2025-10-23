@@ -38,13 +38,17 @@ def test_markdown_to_records_basic():
     assert first['location'].startswith('東京都')
     assert first['skills'] == ['SaaS営業']
     assert first['experiences'][0]['company'] == '株式会社ABC'
-    assert first['experiences'][0]['start'] == '2020-01'
-    assert first['experiences'][0]['end'] == '2022-03'
-    assert '新規開拓を担当' in first['experiences'][0]['bullets'][0]
+    first_exp = first['experiences'][0]
+    assert first_exp['start'] == '2020-01'
+    assert first_exp['end'] == '2022-03'
+    assert '新規開拓を担当' in first_exp['summary']
+    assert 'bullets' not in first_exp
 
     second = records[1]
     assert second['candidate_id'] == 'BU7654321'
-    assert second['experiences'][0]['end'] is None
+    second_exp = second['experiences'][0]
+    assert second_exp['start'] == '2023-04'
+    assert 'end' not in second_exp
 
 
 DETAIL_SAMPLE = """
@@ -79,12 +83,14 @@ def test_markdown_to_records_plain_company_lines():
     assert first['company'] == 'フリー株式会社（freee株式会社）'
     assert first['title'] == 'パートナー事業部'
     assert first['start'] == '2023-12'
-    assert first['end'] is None
-    assert 'リード獲得の企画立案' in first['bullets']
+    assert 'end' not in first
+    assert 'リード獲得の企画立案' in first['summary']
+    assert 'bullets' not in first
 
     second = experiences[1]
     assert second['company'] == '株式会社電通デジタル'
     assert second['title'] == 'ダイレクトアカウントプランニング部'
     assert second['start'] == '2023-01'
     assert second['end'] == '2023-11'
-    assert second['bullets'] == ['競合コンペ勝率80%']
+    assert '競合コンペ勝率80%' in second['summary']
+    assert 'bullets' not in second
