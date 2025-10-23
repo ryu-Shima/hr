@@ -74,6 +74,8 @@ BU0000001
 
 ## 特記事項
 希望勤務地：東京都
+転居可・フルリモート可
+希望年収：600〜800万円
 """.strip()
 
 
@@ -86,6 +88,10 @@ def test_markdown_to_records_plain_company_lines():
     constraints = records[0].get('constraints')
     assert constraints
     assert constraints.get('location') == ['東京都']
+    assert constraints.get('can_relocate') is True
+    assert constraints.get('remote_ok') is True
+    assert records[0]['desired_salary_min_jpy'] == 6000000
+    assert records[0]['desired_salary_max_jpy'] == 8000000
 
     first = experiences[0]
     assert first['company'] == 'フリー株式会社（freee株式会社）'

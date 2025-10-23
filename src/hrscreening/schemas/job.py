@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -36,6 +38,7 @@ class JobDescription(BaseModel):
     requirements_text: list[str] = Field(default_factory=list)
     key_phrases: list[str] = Field(default_factory=list)
     constraints: JobConstraints = Field(default_factory=JobConstraints)
+    evaluation_overrides: dict[str, Any] = Field(default_factory=dict)
     evaluation_overrides: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="allow")

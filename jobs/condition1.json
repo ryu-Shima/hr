@@ -1,0 +1,23 @@
+{
+  "job_id": "JD-template-1",
+  "locale": "ja-JP",
+  "role_titles": ["Customer Success Manager", "CS Lead"],
+  "requirements_text": [
+    "SaaS導入オンボーディングの設計・推進経験",
+    "プロジェクトマネジメント経験"
+  ],
+  "key_phrases": ["オンボーディング", "顧客課題"],
+  "constraints": {
+    "salary_range": { "min_jpy": 7000000, "max_jpy": 12000000 }
+  },
+  "evaluation_overrides": {
+    "salary": { "tolerance_ratio": 0.15 },
+    "jd_keywords": {
+      "must": ["オンボーディング", "顧客課題"],
+      "nice": ["プロジェクトマネジメント"],
+      "nice_to_have": ["生成AI"],
+      "weights": { "must": 1.0, "nice": 0.75, "nice_to_have": 0.5 },
+      "title_bonus": 0.1
+    }
+  }
+}

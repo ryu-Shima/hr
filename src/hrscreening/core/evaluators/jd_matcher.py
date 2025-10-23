@@ -29,45 +29,53 @@ class JDMatcher:
         profile = CandidateProfile.model_validate(candidate)
         job = JobDescription.model_validate(context["job"])
         overrides = (context.get("evaluation_overrides") or {}).get("jd_keywords", {})
-        must_keywords, nice_keywords = self._extract_keywords(context, job, overrides)
+        keyword_groups = self._extract_keywords(context, job, overrides)
         searchable_corpus = self._build_corpus(profile)
 
-        must_hits = self._match_keywords(searchable_corpus, must_keywords)
-        nice_hits = self._match_keywords(searchable_corpus, nice_keywords)
+        default_weights = {"must": 1.0, "nice": 0.75, "nice_to_have": 0.5}
+        override_weights = overrides.get("weights", {}) or {}
 
-        must_coverage = self._coverage_ratio(must_keywords, must_hits)
-        nice_coverage = self._coverage_ratio(nice_keywords, nice_hits)
-
-        must_unique = len(set(must_hits))
-        nice_unique = len(set(nice_hits))
-
-        weights = overrides.get("weights", {})
-        must_weight = float(weights.get("must", 1.0)) if must_keywords else 0.0
-        nice_weight = float(weights.get("nice", 0.5)) if nice_keywords else 0.0
-
+        hits: dict[str, list[str]] = {}
+        coverage: dict[str, float] = {}
         weighted_sum = 0.0
         total_weight = 0.0
-        if must_weight:
-            weighted_sum += must_weight * (must_unique / len(must_keywords))
-            total_weight += must_weight
-        if nice_weight:
-            weighted_sum += nice_weight * (nice_unique / len(nice_keywords))
-            total_weight += nice_weight
+
+        for category, keywords in keyword_groups.items():
+            if not keywords:
+                continue
+            matched = self._match_keywords(searchable_corpus, keywords)
+            hits[category] = matched
+            coverage_value = self._coverage_ratio(keywords, matched)
+            coverage[category] = coverage_value
+            weight = float(override_weights.get(category, default_weights.get(category, 0.0)))
+            if weight <= 0.0:
+                continue
+            total_weight += weight
+            weighted_sum += weight * coverage_value
 
         score = weighted_sum / total_weight if total_weight > 0 else 0.0
         score = min(max(score, 0.0), 1.0)
 
         jd_pass = 1.0 if score > 0 else 0.0
-        title_bonus = overrides.get("title_bonus", 0.1) if nice_unique else 0.0
-        sim_title = nice_coverage
+        has_bonus_hit = any(hits.get(cat) for cat in ("nice", "nice_to_have"))
+        title_bonus = overrides.get("title_bonus", 0.1) if has_bonus_hit else 0.0
+        sim_title = max(coverage.get("nice", 0.0), coverage.get("nice_to_have", 0.0))
         embed_sim = score
         bm25_proxy = score
+
+        metadata_weights = {
+            "must": default_weights["must"] if "must" not in override_weights else override_weights["must"],
+            "nice": default_weights["nice"] if "nice" not in override_weights else override_weights["nice"],
+            "nice_to_have": default_weights["nice_to_have"]
+            if "nice_to_have" not in override_weights
+            else override_weights["nice_to_have"],
+        }
 
         return {
             "method": self.method,
             "scores": {
-                "jd_must_coverage": must_coverage,
-                "jd_nice_coverage": nice_coverage,
+                "jd_must_coverage": coverage.get("must", 1.0 if not keyword_groups.get("must") else 0.0),
+                "jd_nice_coverage": coverage.get("nice", 1.0 if not keyword_groups.get("nice") else 0.0),
                 "jd_pass": jd_pass,
                 "embed_sim": embed_sim,
                 "bm25_prox": bm25_proxy,
@@ -75,13 +83,12 @@ class JDMatcher:
                 "title_bonus": title_bonus,
             },
             "metadata": {
-                "must_keywords": must_keywords,
-                "nice_keywords": nice_keywords,
-                "must_hits": must_hits,
-                "nice_hits": nice_hits,
+                "keywords": keyword_groups,
+                "hits": hits,
+                "coverage": coverage,
                 "corpus_size": len(searchable_corpus),
                 "min_similarity": self._config.min_similarity,
-                "weights": {"must": must_weight, "nice": nice_weight},
+                "weights": metadata_weights,
                 "title_bonus": title_bonus,
             },
         }
@@ -91,18 +98,20 @@ class JDMatcher:
         context: dict[str, Any],
         job: JobDescription,
         overrides: dict[str, Any],
-    ) -> tuple[list[str], list[str]]:
+    ) -> dict[str, list[str]]:
         context_keywords = context.get("jd_keywords") or {}
-        must_keywords = overrides.get("must")
-        if must_keywords is None:
-            must_keywords = context_keywords.get("must") or job.key_phrases or []
-        nice_keywords = overrides.get("nice")
-        if nice_keywords is None:
-            nice_keywords = context_keywords.get("nice") or job.role_titles or []
-        return (
-            [kw.strip() for kw in must_keywords if kw],
-            [kw.strip() for kw in nice_keywords if kw],
-        )
+        groups = {
+            "must": overrides.get("must"),
+            "nice": overrides.get("nice"),
+            "nice_to_have": overrides.get("nice_to_have"),
+        }
+        if groups["must"] is None:
+            groups["must"] = context_keywords.get("must") or job.key_phrases or []
+        if groups["nice"] is None:
+            groups["nice"] = context_keywords.get("nice") or job.role_titles or []
+        if groups["nice_to_have"] is None:
+            groups["nice_to_have"] = context_keywords.get("nice_to_have") or []
+        return {key: [kw.strip() for kw in values if kw] for key, values in groups.items()}
 
     def _build_corpus(self, profile: CandidateProfile) -> list[str]:
         corpus: list[str] = []

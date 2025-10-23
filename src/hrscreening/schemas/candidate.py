@@ -93,6 +93,8 @@ class CandidateConstraints(BaseModel):
     language: list[str] = Field(default_factory=list)
     location: list[str] = Field(default_factory=list)
     visa: str | None = None
+    can_relocate: bool | None = None
+    remote_ok: bool | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -130,4 +132,3 @@ class CandidateProfile(BaseModel):
     provider_raw: ProviderRawPayload = Field(default_factory=ProviderRawPayload)
 
     model_config = ConfigDict(extra="allow")
-

@@ -3,7 +3,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 
 from .schemas import CandidateConstraints, CandidateProfile, LanguageProficiency
 from .pdf_utils import extract_markdown
@@ -35,6 +35,17 @@ COMPANY_KEYWORDS = (
     "学校法人",
 )
 PAREN_STRIP_RE = re.compile(r"[()（）]")
+HOPE_LOCATION_PATTERN = re.compile(r"希望勤務地[：:]\s*(.+)")
+SALARY_RANGE_PATTERN = re.compile(
+    r"希望年収[：:]\s*(\d+(?:[.,]\d+)?)(?:\s*[万万円]?)\s*[〜~\-ー]\s*(\d+(?:[.,]\d+)?)(?:\s*万円?)",
+    re.IGNORECASE,
+)
+SALARY_SINGLE_PATTERN = re.compile(r"希望年収[：:]\s*(\d+(?:[.,]\d+)?)(?:\s*万円?)", re.IGNORECASE)
+SALARY_WORD_PATTERN = re.compile(r"年収\s*(\d+(?:[.,]\d+)?)\s*万円")
+RELOCATION_POS_PATTERN = re.compile(r"(転居可|転居可能|転勤可|転勤可能)")
+RELOCATION_NEG_PATTERN = re.compile(r"(転居不可|転居困難|転勤不可)")
+REMOTE_POS_PATTERN = re.compile(r"(フルリモート|リモート可|在宅勤務可|在宅ワーク可)")
+REMOTE_NEG_PATTERN = re.compile(r"(リモート不可|在宅不可)")
 HOPE_LOCATION_PATTERN = re.compile(r"希望勤務地[：:]\s*(.+)")
 
 OVERVIEW_KEYS = [
@@ -156,7 +167,17 @@ def _lines_to_candidate(candidate_id: str, lines: list[str]) -> dict:
         provider_fields["学歴/語学"] = academic_overview
 
     desired_locations = _extract_desired_locations(sections)
-    constraints = CandidateConstraints(location=desired_locations) if desired_locations else None
+    can_relocate, remote_ok = _extract_special_constraints(sections)
+    desired_salary_min, desired_salary_max = _extract_desired_salary(sections)
+
+    constraints_kwargs: dict[str, Any] = {}
+    if desired_locations:
+        constraints_kwargs["location"] = desired_locations
+    if can_relocate is not None:
+        constraints_kwargs["can_relocate"] = can_relocate
+    if remote_ok is not None:
+        constraints_kwargs["remote_ok"] = remote_ok
+    constraints = CandidateConstraints(**constraints_kwargs) if constraints_kwargs else None
 
     profile = CandidateProfile(
         provider="bizreach",
@@ -173,6 +194,8 @@ def _lines_to_candidate(candidate_id: str, lines: list[str]) -> dict:
         notes=notes,
         provider_raw={"text": "\n".join(lines).strip(), "fields": provider_fields},
         constraints=constraints,
+        desired_salary_min_jpy=desired_salary_min,
+        desired_salary_max_jpy=desired_salary_max,
     )
     raw = profile.model_dump(mode="python", exclude_none=True)
     return _prune_empty(raw)
@@ -455,6 +478,59 @@ def _clean_context_text(text: str) -> str:
 def _clean_summary_line(text: str) -> str:
     cleaned = _strip_strikethrough(text)
     return cleaned.strip()
+
+
+def _extract_special_constraints(sections: dict[str, list[str]]) -> tuple[bool | None, bool | None]:
+    can_relocate: bool | None = None
+    remote_ok: bool | None = None
+    for lines in sections.values():
+        for raw_line in lines:
+            stripped = _strip_strikethrough(raw_line.strip())
+            if not stripped:
+                continue
+            if RELOCATION_NEG_PATTERN.search(stripped):
+                can_relocate = False
+            elif RELOCATION_POS_PATTERN.search(stripped) and can_relocate is None:
+                can_relocate = True
+            if REMOTE_NEG_PATTERN.search(stripped):
+                remote_ok = False
+            elif REMOTE_POS_PATTERN.search(stripped) and remote_ok is None:
+                remote_ok = True
+    return can_relocate, remote_ok
+
+
+def _extract_desired_salary(sections: dict[str, list[str]]) -> tuple[int | None, int | None]:
+    salary_min: int | None = None
+    salary_max: int | None = None
+    for lines in sections.values():
+        for raw_line in lines:
+            stripped = _strip_strikethrough(raw_line.strip())
+            if not stripped:
+                continue
+            if salary_min is None or salary_max is None:
+                range_match = SALARY_RANGE_PATTERN.search(stripped)
+                if range_match:
+                    salary_min = _salary_to_int(range_match.group(1))
+                    salary_max = _salary_to_int(range_match.group(2))
+                    continue
+            if salary_min is None and salary_max is None:
+                single_match = SALARY_SINGLE_PATTERN.search(stripped)
+                if single_match:
+                    value = _salary_to_int(single_match.group(1))
+                    salary_min = salary_max = value
+                    continue
+            if salary_min is None and salary_max is None:
+                generic_match = SALARY_WORD_PATTERN.search(stripped)
+                if generic_match:
+                    value = _salary_to_int(generic_match.group(1))
+                    salary_min = salary_max = value
+    return salary_min, salary_max
+
+
+def _salary_to_int(value: str) -> int:
+    normalized = value.replace(",", "")
+    amount = float(normalized)
+    return int(amount * 10000)
 
 
 def _extract_desired_locations(sections: dict[str, list[str]]) -> list[str]:

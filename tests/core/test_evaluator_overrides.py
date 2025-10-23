@@ -40,7 +40,7 @@ def test_jd_matcher_uses_keyword_overrides():
             ExperienceEntry(
                 company="Example",
                 title="カスタマーサクセス リード",
-                summary="ITコンサルタントとして生成AIプロジェクトを推進し、活用施策を企画",
+                summary="顧客課題を定義しオンボーディングプロジェクトを推進、生成AI 支援施策を企画",
             )
         ],
     )
@@ -48,9 +48,10 @@ def test_jd_matcher_uses_keyword_overrides():
 
     overrides = {
         "jd_keywords": {
-            "must": ["カスタマーサクセス,プロジェクトマネージャー,PM"],
-            "nice": ["生成AI,クライアントワーク,コンサル"],
-            "weights": {"must": 1.0, "nice": 1.0},
+            "must": ["顧客課題", "オンボーディング"],
+            "nice": ["生成AI"],
+            "nice_to_have": ["プロジェクト"],
+            "weights": {"must": 1.0, "nice": 0.75, "nice_to_have": 0.5},
             "title_bonus": 0.2,
         }
     }
@@ -62,5 +63,22 @@ def test_jd_matcher_uses_keyword_overrides():
     result = evaluator.evaluate(candidate.model_dump(mode="python"), context)
 
     assert result["scores"]["jd_pass"] == 1.0
-    assert result["metadata"]["weights"] == {"must": 1.0, "nice": 1.0}
+    assert result["metadata"]["weights"] == {"must": 1.0, "nice": 0.75, "nice_to_have": 0.5}
     assert result["scores"]["title_bonus"] == pytest.approx(0.2)
+    assert result["metadata"]["hits"]["must"] == ["顧客課題", "オンボーディング"]
+    assert result["metadata"]["hits"]["nice"] == ["生成AI"]
+
+
+def test_salary_evaluator_neutral_when_insufficient():
+    evaluator = SalaryEvaluator()
+    candidate = CandidateProfile(provider="test", candidate_id="C-neutral")
+    job = JobDescription(
+        job_id="JD-neutral",
+        constraints={"salary_range": {"min_jpy": 7_000_000, "max_jpy": 12_000_000}},
+    )
+    context = {"job": job.model_dump(mode="python"), "evaluation_overrides": {}}
+
+    result = evaluator.evaluate(candidate.model_dump(mode="python"), context)
+
+    assert result["scores"]["salary_pass"] == pytest.approx(0.5)
+    assert result["metadata"]["status"] == "insufficient_data"

@@ -676,5 +676,8 @@ Temperature = 0.
 - BizReach PDF 変換で `職務経歴` セクションから会社名・在籍期間（start/end）・所属部署（title）・業務内容全文（summary）を正規化し、複数行に分割された箇条書きも連結したうえで `CandidateProfile.experiences` を常に充足するよう改修（`src/hrscreening/markdown_to_jsonl.py`、`tests/markdown/test_markdown_to_jsonl.py`）。
 - 日本語・ビザのハードゲートを撤廃し、勤務地条件を緩和して給与ゲート詳細を結果 JSON と監査ログに記録、JD キーワード評価をヒット数に応じた加点方式へ移行（`src/hrscreening/markdown_to_jsonl.py`、`src/hrscreening/core/screening.py`、`src/hrscreening/core/evaluators/jd_matcher.py`、`src/hrscreening/pipeline.py`）。
 - JobDescription に `evaluation_overrides` を追加し、求人ごとに給与トレランスや JD キーワード構成・重みを変更できるよう拡張（`src/hrscreening/schemas/job.py`、`src/hrscreening/core/evaluators/salary.py`、`src/hrscreening/core/evaluators/jd_matcher.py`、`src/hrscreening/core/screening.py`）。
+- レジュメ解析で「希望年収」「転居可」「リモート可」を抽出し、`desired_salary` や `CandidateConstraints` へ反映。テンプレート求人ファイル（`jobs/condition1.json`）を追加し、案件ごとの条件設定を簡素化（`src/hrscreening/markdown_to_jsonl.py`、`jobs/condition1.json`）。
+- 希望年収が未設定の候補者に対しては `SalaryEvaluator` が中立スコア（0.5）を返すよう調整し、評価スコアの過剰な加点を防止（`src/hrscreening/core/evaluators/salary.py`）。
+- JD キーワード評価に `nice_to_have` カテゴリを追加し、既定の重みを must=1.0 / nice=0.75 / nice_to_have=0.5 として加点できるよう拡張（`src/hrscreening/core/evaluators/jd_matcher.py`、`tests/core/test_evaluator_overrides.py`）。
 
 

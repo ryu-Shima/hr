@@ -39,6 +39,7 @@ class SalaryEvaluator:
                 message="insufficient_data",
                 status="insufficient_data",
                 tolerance_ratio=tolerance_ratio,
+                pass_score=0.5,
             )
 
         expanded_job_min = (
@@ -147,11 +148,12 @@ class SalaryEvaluator:
         status: str | None = None,
         gap: int | None = None,
         tolerance_ratio: float,
+        pass_score: float | None = None,
     ) -> dict[str, Any]:
         return {
             "method": self.method,
             "scores": {
-                "salary_pass": 1.0 if passes else 0.0,
+                "salary_pass": pass_score if pass_score is not None else (1.0 if passes else 0.0),
                 "salary_overlap_span": overlap_span or 0.0,
             },
             "metadata": {
